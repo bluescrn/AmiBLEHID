@@ -1,4 +1,10 @@
-# AmiBLEHID - Work in progress
+# AmiBLEHID
+
+Work in progress. Current PCB revision is untested.
+
+I have a working prototype but rearranged the board and added the buttons+LEDs.
+
+![Pic of prototype](/assets/images/prototype.jpeg)
 
 ## What is it?
 
@@ -18,4 +24,4 @@ BLE game controllers are very uncommon, the only common one that I'm aware of is
   
 Only supports two joystick/mouse buttons. Supporting the CD32 button protocol would significantly complicate things. And using a single 74HC05 limits it to 6 outputs at the moment (4 directions, 2 buttons)
 
-The USB-C port on the ESP32 module isn't currently supportedd for wired mice/controllers. Would be nice to support that, but the additional current draw may well be too much for the Amiga joystick port
+The USB-C port on the ESP32 module isn't currently supported for wired mice/controllers. Would be nice to support that, but the additional current draw may well be too much for the Amiga joystick port

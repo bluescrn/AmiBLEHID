@@ -12,18 +12,6 @@
 // - FastLED (tested with 3.10.3)
 // ------------------------------------------------------------------------------------------------------------------------
 
-#include <FastLED.h>
-
-// FastLED (Just a test until I get v2 PCB)
-#define FASTLED_PIN         10
-#define FASTLED_TYPE        WS2811
-#define FASTLED_COLOR_ORDER GRB
-#define FASTLED_NUM_LEDS    2
-#define FASTLED_BRIGHTNESS  16
-
-// On-board LED
-#define LED_PIN 8
-
 #define PIN_U 0
 #define PIN_D 1
 #define PIN_L 2
@@ -36,11 +24,15 @@
 #define PIN_Y1 2
 #define PIN_X2 3
 
+#define PIN_BTN_RESET 22
+#define PIN_BTN_MODE  25
+
 #include <NimBLEDevice.h>
 #include <BTScan.h>
 #include <BTHIDConn.h>
 #include <EEPROM.h>
 #include <Preferences.h>
+#include <LEDs.h>
 
 void IRAM_ATTR onQuadratureTimer();
 
@@ -55,8 +47,6 @@ void IRAM_ATTR onQuadratureTimer();
 const int k_mouseRates[NUM_MOUSE_RATES] = {4, 8, 12, 16};
 const int k_defaultMouseRateIdx = 1;
 const int k_settingsSaveVersion = 1;
-
-CRGB _leds[FASTLED_NUM_LEDS];
 
 // ------------------------------------------------------------------------------------------------------------------------
 // States
@@ -94,6 +84,7 @@ hw_timer_t  *_quadratureTimer   = NULL;
 int          _currMouseRateIdx  = 0;
 GamepadMode  _currGamepadMode   = GamepadMode::Default;
 
+LEDs         _statusLeds;
 
 // ------------------------------------------------------------------------------------------------------------------------
 // Main setup function
@@ -112,31 +103,28 @@ void setup ()
     timerAttachInterrupt(_quadratureTimer, &onQuadratureTimer);
     timerAlarm(_quadratureTimer, 1, true, 0);
     timerStart(_quadratureTimer);
-
-    rgbLedWrite(LED_PIN, 32, 0, 32); 
-
+    
     pinMode( PIN_U, OUTPUT );
     pinMode( PIN_D, OUTPUT );
     pinMode( PIN_L, OUTPUT );
     pinMode( PIN_R, OUTPUT );
     pinMode( PIN_A, OUTPUT );
     pinMode( PIN_B, OUTPUT );
+
+    pinMode( PIN_BTN_RESET, INPUT_PULLUP );
+    pinMode( PIN_BTN_MODE,  INPUT_PULLUP );
+
     zeroOutputs();
 
     Serial.begin(115200);
     
+    delay(500);
+
+    _statusLeds.init();
+
     // Give serial monitor a chance to connect
-    delay( 2000 );
+    delayWithLEDUpdates( 1000 );
     
-    FastLED.addLeds<FASTLED_TYPE, FASTLED_PIN, FASTLED_COLOR_ORDER>(_leds, FASTLED_NUM_LEDS).setCorrection( TypicalLEDStrip );
-    FastLED.setBrightness( FASTLED_BRIGHTNESS );    
-    
-    _leds[0] = 0x00ffff;
-    _leds[1] = 0xff00ff;
-    FastLED.show();
-
-    rgbLedWrite(LED_PIN, 32, 32, 32); 
-
     Serial.println("");
     Serial.println("");
     Serial.println("");
@@ -154,6 +142,37 @@ void setup ()
 
     _state = State_Scanning;
 }
+
+
+
+// ------------------------------------------------------------------------------------------------------------------------
+// Delay, but calling LED update function every 16ms
+// ------------------------------------------------------------------------------------------------------------------------
+
+int _millisUntilLEDUpdate = 0;
+
+void delayWithLEDUpdates( int millis )
+{
+    if ( _millisUntilLEDUpdate<millis )
+    {
+        FastLED.delay( _millisUntilLEDUpdate );
+        millis-=_millisUntilLEDUpdate;
+        _millisUntilLEDUpdate = 16;
+        _statusLeds.process();
+    }
+    
+    while( millis>16 )
+    {
+        FastLED.delay( 16 );
+        _statusLeds.process();
+        millis-=16;
+        _millisUntilLEDUpdate = 16;
+    }
+
+    FastLED.delay(millis);
+    _millisUntilLEDUpdate -= millis;    
+}
+
 
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -205,11 +224,7 @@ void loop ()
         case State_Scanning:
             {
                 // Blink on-board LED blue
-                delay(150);
-                rgbLedWrite(LED_PIN, 0, 0, 0); 
-                delay(200);
-                rgbLedWrite(LED_PIN, 0, 0, 64); 
-
+                _statusLeds.setState(LED_STATUS, LEDMODE_BTSCAN);
                 zeroOutputs();
                 
                 // Found a device yet?
@@ -218,12 +233,13 @@ void loop ()
                 if ( foundDevice )
                 {
                     Serial.println("Device found, attempting to connect!");
-                    
-                    rgbLedWrite(LED_PIN, 32, 64, 0);
+
+                    _statusLeds.setState(LED_STATUS, LEDMODE_BTCONNECTING);                 
+                    delayWithLEDUpdates(16);
 
                     if ( _btHIDConn->connect(foundDevice) )
                     {
-                        _state = State_Connected;
+                        _state = State_Connecting;
                     }            
                     else
                     {
@@ -239,10 +255,7 @@ void loop ()
             break;
 
         case State_Connecting:
-            {
-                rgbLedWrite(LED_PIN, 32, 64, 0);
-                delay(15);
-
+            {                
                 if ( _btHIDConn->isConnected() )
                 {                
                     _state = State_Connected;
@@ -257,10 +270,11 @@ void loop ()
                 {
                     zeroOutputs();
 
+                    _statusLeds.setState(LED_STATUS, LEDMODE_DISCONNECTED); 
+                    delayWithLEDUpdates(500);
+
                     _state = State_Scanning;
                     Serial.println("Connection lost, restarting scan!");
-                    rgbLedWrite(LED_PIN, 0, 64, 0); 
-                    delay(1000);
                     _btScan->start( _scanDuration, false );
                 }
                 else
@@ -280,10 +294,30 @@ void loop ()
             break;
 
         case State_Idle:
-            rgbLedWrite(LED_PIN, 0, 64, 0); 
-            delay(15);
+            _statusLeds.setState(LED_STATUS, LEDMODE_IDLE);             
             break;
-    }    
+    }        
+
+    // 4ms delay, refresh 4x per 60hz frame. Bluetooth will be the limiting factor
+    delayWithLEDUpdates(4);
+
+
+    _statusLeds.setState(LED_MODE, digitalRead(PIN_BTN_RESET) ? LEDMODE_IDLE : LEDMODE_DISCONNECTED); 
+
+    if ( digitalRead(PIN_BTN_RESET)==0 )
+    {
+        Serial.println("Reset button, restarting scan!");
+
+        _statusLeds.setState(LED_STATUS, LEDMODE_OFF);
+        _statusLeds.setState(LED_MODE,   LEDMODE_OFF);
+        _btHIDConn->disconnect();
+
+        // todo - deleteAllBonds
+        delayWithLEDUpdates(500);
+
+        _state = State_Scanning;        
+        _btScan->start( _scanDuration, false );
+    }
 }
 
 
@@ -295,15 +329,17 @@ void modeCycleLEDFlash( int numFlashes )
 {
     zeroOutputs();
 
-    delay(250);
+    delayWithLEDUpdates(250);
+/*    
     for( int i=0; i<numFlashes; i++ )
     {
         rgbLedWrite(LED_PIN, 64, 255, 0); 
-        delay(150);
+        delayWithLEDUpdates(150);
         rgbLedWrite(LED_PIN, 0, 0, 0); 
-        delay(175);
+        delayWithLEDUpdates(175);
     }
-    delay(100);
+    delayWithLEDUpdates(100);
+*/    
 }
 
 
@@ -369,7 +405,7 @@ void update_gamepad()
     digitalWrite(PIN_B, btnb); 
 
     // Green LED (green = Xbox color...)
-    rgbLedWrite(LED_PIN, 32, 0, 0); 
+    _statusLeds.setState(LED_STATUS, LEDMODE_CONTROLLER_ACTIVE);    
 
     // Check for mode switch (up-to-jumps)
     if ( modeCycleCheck( _btHIDConn->getGamePadButton(10) ||    // Start or Sel on Xbox pad
@@ -383,9 +419,6 @@ void update_gamepad()
         modeCycleLEDFlash(_currGamepadMode+1);
         saveSettings();
     }    
-
-    // 4ms delay, refresh 4x per 60hz frame. Bluetooth will be the limiting factor
-    delay(4);
 }
 
 
@@ -470,7 +503,8 @@ void update_mouse()
     digitalWrite(PIN_A, lmb); 
     digitalWrite(PIN_B, rmb); 
 
-    rgbLedWrite(LED_PIN, 32, 32, 16); 
+    // White LED for active mouse
+    _statusLeds.setState(LED_STATUS, LEDMODE_MOUSE_ACTIVE);    
 
     // Check for mode switch (cycle mouse speeds)
     if ( modeCycleCheck(_btHIDConn->getMouseButton(2)) )
@@ -484,9 +518,6 @@ void update_mouse()
         modeCycleLEDFlash(_currMouseRateIdx+1);
         saveSettings();
     }
-
-    // 4ms delay, refresh 4x per 60hz frame. Bluetooth will be the limiting factor
-    delay(4);
 }
 
 

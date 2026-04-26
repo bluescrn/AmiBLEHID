@@ -28,8 +28,9 @@ private:
 public:
 
     bool connect( const NimBLEAdvertisedDevice* device );
+    void disconnect();
     void notifyCB( NimBLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pData, size_t length, uint8_t reportId, bool isNotify);        
-    bool isConnected();
+    bool isConnected();    
 
     bool isGamepad() { return (m_deviceTypes & hid::FLAG_GAMEPAD); }
     bool isMouse()   { return (m_deviceTypes & hid::FLAG_MOUSE);   }

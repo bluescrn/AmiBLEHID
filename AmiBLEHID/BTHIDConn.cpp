@@ -5,6 +5,7 @@
 // Initially based on this example: https://github.com/esp32beans/BLE_HID_Client
 // ------------------------------------------------------------------------------------------------------------------------
 
+#include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <BTHIDConn.h>
 
@@ -120,6 +121,8 @@ void BTHIDConn::notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic, uint
 {        
     int res = m_parser.Parse(pData, length, reportId);
 
+    m_stateValid = true;
+
     if ( isMouse() )
     {
         m_mouseDeltaX += m_mouseAxes[hid::MouseConfig::X];
@@ -153,6 +156,40 @@ bool BTHIDConn::isConnected()
 }
 
 // ------------------------------------------------------------------------------------------------------------------------
+// deleteAllBonds
+// ------------------------------------------------------------------------------------------------------------------------
+
+void BTHIDConn::deleteAllBonds()
+{
+    NimBLEAddress bondedAddresses[NIMBLE_MAX_CONNECTIONS];
+    
+    NimBLEDevice::deleteAllBonds();
+
+    int numBonds = NimBLEDevice::getNumBonds();
+
+    if (numBonds>0)
+    {
+        Serial.printf("NimBLEDevice::deleteAllBonds() left %d bonds present\n", numBonds );
+
+        for( int i=0; i<numBonds;i++ )
+        {
+            bondedAddresses[i] = NimBLEDevice::getBondedAddress(i);
+        }
+
+        for( int i=0; i<numBonds;i++ )
+        {            
+            bool success = NimBLEDevice::deleteBond(bondedAddresses[i]);
+
+            if ( !success )
+            {
+                // Can't delete bonds while still connected/scanning. That's the most likely cause if this happens again
+                Serial.printf("Failed to delete bond %d: %s\n", i, bondedAddresses[i].toString().c_str()  );
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------
 // connect
 // ------------------------------------------------------------------------------------------------------------------------
 
@@ -166,6 +203,31 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
     const char HID_CONTROL_POINT[] = "2A4C";
     const char HID_REPORT_DATA[]   = "2A4D";
 
+    
+    int  numBonds = NimBLEDevice::getNumBonds();
+    bool isBonded = false;
+
+    m_stateValid = false;
+
+    // Show bond info
+    if ( numBonds>0 )
+    {
+        Serial.printf("Num Bonds: %d\n", numBonds );
+        for (int i = 0; i < numBonds; i++)
+        {            
+            std::string addr = NimBLEDevice::getBondedAddress(i).toString();
+
+            if ( NimBLEDevice::getBondedAddress(i) == device->getAddress() )
+            {
+                isBonded = true;
+                Serial.printf("- Bonded client %d: %s <-- Connecting\n", i, addr.c_str() );            
+            }
+            else
+            {
+                Serial.printf("- Bonded client %d: %s\n", i, addr.c_str() );
+            }            
+        }
+    }
 
     // Check if we have a client we should reuse first
     if( NimBLEDevice::getCreatedClientCount()>0 )
@@ -206,22 +268,8 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
         if(NimBLEDevice::getNumBonds() >= NIMBLE_MAX_CONNECTIONS) 
         {            
             Serial.println("Max clients reached! Full reset, clearing all bonded clients");
-            NimBLEDevice::deleteAllBonds();               
+            deleteAllBonds();
         }
-
-        int numBonds = NimBLEDevice::getNumBonds();
-            
-        // Show bond info
-        if ( numBonds>0 )
-        {
-            Serial.printf("Num Bonds: %d\n", numBonds );
-            for (int i = 0; i < numBonds; i++)
-            {
-                std::string addr = NimBLEDevice::getBondedAddress(i).toString();
-                Serial.printf("- Bonded client %d: %s\n", i, addr.c_str() );            
-            }
-        }
-
 
         pClient = NimBLEDevice::createClient();
         Serial.println("New client");
@@ -315,6 +363,12 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
                     auto axes_ref = m_gamepadAxes.Ref();  
                     auto cfg_root = cfg.Init( &buttons_ref, &axes_ref, true );
                     int res = m_parser.Init(cfg_root, descriptorData, descriptorLength );
+
+                    // Init axis scalers
+                    m_axisScalerX0.Init(  &cfg.axes.properties[hid::GamepadConfig::X], -256, 256, false );
+                    m_axisScalerY0.Init(  &cfg.axes.properties[hid::GamepadConfig::Y], -256, 256, false );
+                    m_axisScalerHat.Init( &cfg.axes.properties[hid::GamepadConfig::HAT_SWITCH], 1, 8, true );
+
                     Serial.printf("Device is Gamepad (reportId Mappings: %d)\n", m_parser.NumMappings());
                     parserOk = (res==0);                    
                 }
@@ -416,6 +470,8 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
 
 void BTHIDConn::disconnect()
 {
+    m_stateValid = false;
+    
     for (auto &it:NimBLEDevice::getConnectedClients()) 
     {   
         it->disconnect();
@@ -433,30 +489,38 @@ const int hatSwitchYAxis[9] = { 0,-1,-1, 0, 1, 1, 1, 0,-1};
 
 int BTHIDConn::getGamepadDigitalXAxis()
 {
-    int hat = m_gamepadAxes[hid::GamepadConfig::HAT_SWITCH];
+    int hat = getGamepadHatSwitchDir();
     if ( hat<0 || hat>8 ) hat = 0;
     return hatSwitchXAxis[hat];
 }
 
 int BTHIDConn::getGamepadDigitalYAxis()
 {
-    int hat = m_gamepadAxes[hid::GamepadConfig::HAT_SWITCH];
+    int hat = getGamepadHatSwitchDir();
     if ( hat<0 || hat>8 ) hat = 0;
     return hatSwitchYAxis[hat];
 }
 
+int BTHIDConn::getGamepadHatSwitchDir()
+{
+    if (!m_stateValid) return 0;
+    return m_axisScalerHat.ScaleValue( m_gamepadAxes[hid::GamepadConfig::HAT_SWITCH] ); 
+}
+
 int BTHIDConn::getGamepadLeftStickXAxis()
 {
-    return m_gamepadAxes[hid::GamepadConfig::X];        
+    if (!m_stateValid) return 0;
+    return m_axisScalerX0.ScaleValue( m_gamepadAxes[hid::GamepadConfig::X] ); 
 }
 
 int BTHIDConn::getGamepadLeftStickYAxis()
 {
-    return m_gamepadAxes[hid::GamepadConfig::Y];    
+    if (!m_stateValid) return 0;
+    return m_axisScalerY0.ScaleValue( m_gamepadAxes[hid::GamepadConfig::Y] ); 
 }
 
 bool BTHIDConn::getGamePadButton( int idx )
-{
+{    
     return m_gamepadButtons[idx];    
 }
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText:  2022 Istvan Pasztor
 #pragma once
+#ifndef HID_REPORT_PARSER_H
+#define HID_REPORT_PARSER_H
 
 #include <assert.h>
 #include <string.h>
@@ -2717,3 +2719,5 @@ namespace hid {
 
 
 } // namespace hid
+
+#endif HID_REPORT_PARSER_H

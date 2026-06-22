@@ -17,7 +17,10 @@ private:
 public:
 
     void start( int scanDurationMillisecs=0, bool continueScan=false );
+    void stop();
     bool isScanning();
+    void enableBinding( bool enable );
+    bool isBindingEnabled();
     const NimBLEAdvertisedDevice* getDeviceToConnect();    
 
     BTScan();

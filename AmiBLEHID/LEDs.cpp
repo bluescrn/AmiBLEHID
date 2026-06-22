@@ -70,28 +70,47 @@ void LEDs::process()
                 break;
             
             case LEDMODE_BTSCAN:                
-                col = (_millisecTimer&255) > 80 ? 0x0000ff : 0;
+                col = (_millisecTimer&1023) > 512 ? 0x0000ff : 0;
+                break;
+
+            case LEDMODE_BTBIND:                
+                col = ((_millisecTimer*3)&511) > 300 ? 0x0000ff : 0;
                 break;
 
             case LEDMODE_BTCONNECTING:
-                col = 0x20ff80;
+                col = 0x0000ff;
                 break;
 
             case LEDMODE_CONTROLLER_ACTIVE:
-                col = 0x00ff00;     // todo - slow throb blue
+                col = _buttonPressed ? 0x006000 : 0x002000;     // dim green
                 break;
 
             case LEDMODE_MOUSE_ACTIVE:
-                col = 0xffffff;     // todo - slow throb green
+                col = _buttonPressed ? 0x006060 : 0x002020;     // dim blue
                 break;
 
             case LEDMODE_IDLE:
-                col = 0xffa000;
+                col = 0x220000;
                 break;
 
             case LEDMODE_DISCONNECTED:
-                col = 0xff0000;     // tood - flash?
+                col = 0x802000;
                 break;
+
+            case LEDMODE_HARDRESET:
+                col =  ((_millisecTimer*3)&511) > 300 ? 0x800000 : 0;
+                break;
+
+
+            case LED_MOUSERATE_0:    col = 0x00A000;  break; 
+            case LED_MOUSERATE_1:    col = 0x208000;  break; 
+            case LED_MOUSERATE_2:    col = 0x606000;  break; 
+            case LED_MOUSERATE_3:    col = 0x802000;  break; 
+            case LED_MOUSERATE_4:    col = 0xA00000;  break; 
+
+            case LED_GAMEPADMODE_0:  col = 0x00A000;  break; 
+            case LED_GAMEPADMODE_1:  col = 0x606000;  break; 
+            case LED_GAMEPADMODE_2:  col = 0xA00000;  break; 
 
             default:
                 col = 0xff0000;
@@ -113,3 +132,9 @@ void LEDs::setState( LEDId id, LEDState state )
 {
     _ledStates[id] = state;
 }
+
+void LEDs::setButtonIndicator( bool pressed )
+{
+    _buttonPressed = pressed;
+}
+

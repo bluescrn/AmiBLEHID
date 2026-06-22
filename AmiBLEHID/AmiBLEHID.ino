@@ -9,7 +9,7 @@
 //
 // Required libraries:
 // - NimBLE-Arduino (tested with 2.3.7)
-// - FastLED (tested with 3.10.3)
+// - FastLED (tested with 3.10.3. 3.10.4 didn't work)
 // ------------------------------------------------------------------------------------------------------------------------
 
 #define PIN_U 0
@@ -27,12 +27,14 @@
 #define PIN_BTN_RESET 22
 #define PIN_BTN_MODE  25
 
+#include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <BTScan.h>
 #include <BTHIDConn.h>
 #include <EEPROM.h>
 #include <Preferences.h>
 #include <LEDs.h>
+#include <nvs_flash.h>
 
 void IRAM_ATTR onQuadratureTimer();
 
@@ -40,13 +42,14 @@ void IRAM_ATTR onQuadratureTimer();
 // States
 // ------------------------------------------------------------------------------------------------------------------------
 
-#define ANALOG_STICK_DEADZONE 12500     // Xbox sticks are +/-32768. Big deadzone needed to avoid unwanted diagonals
+#define ANALOG_STICK_DEADZONE 64   // Analog sticks are scaled to a +/-256 range
 
-#define NUM_MOUSE_RATES 4
+#define NUM_MOUSE_RATES 5
 
-const int k_mouseRates[NUM_MOUSE_RATES] = {4, 8, 12, 16};
+const int k_mouseRates[NUM_MOUSE_RATES] = {48, 64, 96, 160, 224};
 const int k_defaultMouseRateIdx = 1;
-const int k_settingsSaveVersion = 1;
+
+const int k_hardResetHoldTime = 140 * 3;  // works out at approx 3 secs. 
 
 // ------------------------------------------------------------------------------------------------------------------------
 // States
@@ -85,6 +88,7 @@ int          _currMouseRateIdx  = 0;
 GamepadMode  _currGamepadMode   = GamepadMode::Default;
 
 LEDs         _statusLeds;
+int          _resetHeldTimer    = 0;
 
 // ------------------------------------------------------------------------------------------------------------------------
 // Main setup function
@@ -136,6 +140,7 @@ void setup ()
     Serial.println("");
   
     _btScan = new BTScan();
+    _btScan->enableBinding( NimBLEDevice::getNumBonds()==0 );
     _btScan->start(_scanDuration);
 
     _btHIDConn = new BTHIDConn();
@@ -224,7 +229,9 @@ void loop ()
         case State_Scanning:
             {
                 // Blink on-board LED blue
-                _statusLeds.setState(LED_STATUS, LEDMODE_BTSCAN);
+                bool binding = _btScan->isBindingEnabled();
+                _statusLeds.setState(LED_STATUS, binding ? LEDMODE_BTBIND : LEDMODE_BTSCAN);
+                _statusLeds.setState(LED_MODE,   LEDMODE_OFF);
                 zeroOutputs();
                 
                 // Found a device yet?
@@ -243,7 +250,7 @@ void loop ()
                     }            
                     else
                     {
-                        Serial.println("Failed to connect, resuming scan!");
+                        Serial.println("Failed to connect, resuming scan!");                        
                         _btScan->start( _scanDuration, true );
                     }
                 }            
@@ -269,12 +276,13 @@ void loop ()
                 if ( !_btHIDConn->isConnected() )
                 {
                     zeroOutputs();
-
                     _statusLeds.setState(LED_STATUS, LEDMODE_DISCONNECTED); 
+                    _statusLeds.setState(LED_MODE,   LEDMODE_DISCONNECTED);
                     delayWithLEDUpdates(500);
 
                     _state = State_Scanning;
                     Serial.println("Connection lost, restarting scan!");
+                    _btScan->enableBinding( NimBLEDevice::getNumBonds()==0 );
                     _btScan->start( _scanDuration, false );
                 }
                 else
@@ -294,52 +302,55 @@ void loop ()
             break;
 
         case State_Idle:
-            _statusLeds.setState(LED_STATUS, LEDMODE_IDLE);             
+            _statusLeds.setState(LED_STATUS, LEDMODE_IDLE);
+            _statusLeds.setState(LED_MODE,   LEDMODE_OFF);
             break;
     }        
 
-    // 4ms delay, refresh 4x per 60hz frame. Bluetooth will be the limiting factor
-    delayWithLEDUpdates(4);
-
-
-    _statusLeds.setState(LED_MODE, digitalRead(PIN_BTN_RESET) ? LEDMODE_IDLE : LEDMODE_DISCONNECTED); 
+    // 3ms delay, refresh approx 4x per 60hz frame. Bluetooth will be the limiting factor
+    delayWithLEDUpdates(3);
 
     if ( digitalRead(PIN_BTN_RESET)==0 )
     {
-        Serial.println("Reset button, restarting scan!");
+        _resetHeldTimer++;
+    }
 
-        _statusLeds.setState(LED_STATUS, LEDMODE_OFF);
-        _statusLeds.setState(LED_MODE,   LEDMODE_OFF);
+    if ( _resetHeldTimer>0 && (digitalRead(PIN_BTN_RESET)!=0) || _resetHeldTimer > k_hardResetHoldTime )
+    {                        
         _btHIDConn->disconnect();
+        _btScan->stop();
+        
+        
+        if ( _resetHeldTimer > k_hardResetHoldTime )
+        {    
+            _statusLeds.setState(LED_STATUS, LEDMODE_HARDRESET);
+            _statusLeds.setState(LED_MODE,   LEDMODE_HARDRESET);        
+            delayWithLEDUpdates(750);
 
-        // todo - deleteAllBonds
-        delayWithLEDUpdates(500);
+            while ( digitalRead(PIN_BTN_RESET)==0 )
+            {
+                delayWithLEDUpdates(10);
+            }
+
+            Serial.println("Reset button held, clearing bonds, restarting scan!");                            
+            _btHIDConn->deleteAllBonds();                        
+        }
+        else
+        {
+            _statusLeds.setState(LED_STATUS, LEDMODE_DISCONNECTED);
+            _statusLeds.setState(LED_MODE,   LEDMODE_DISCONNECTED);        
+            delayWithLEDUpdates(750);
+
+            int numBonds = NimBLEDevice::getNumBonds();            
+            Serial.printf("Reset button, restarting scan (%d bonds)\n", NimBLEDevice::getNumBonds() );                                                    
+        }                    
 
         _state = State_Scanning;        
-        _btScan->start( _scanDuration, false );
-    }
-}
+        _btScan->enableBinding ( true );
+        _btScan->start( _scanDuration, false );            
+        _resetHeldTimer = 0;
+    }    
 
-
-// ------------------------------------------------------------------------------------------------------------------------
-// Do LED flashes on switching mode
-// ------------------------------------------------------------------------------------------------------------------------
-
-void modeCycleLEDFlash( int numFlashes )
-{
-    zeroOutputs();
-
-    delayWithLEDUpdates(250);
-/*    
-    for( int i=0; i<numFlashes; i++ )
-    {
-        rgbLedWrite(LED_PIN, 64, 255, 0); 
-        delayWithLEDUpdates(150);
-        rgbLedWrite(LED_PIN, 0, 0, 0); 
-        delayWithLEDUpdates(175);
-    }
-    delayWithLEDUpdates(100);
-*/    
 }
 
 
@@ -349,16 +360,22 @@ void modeCycleLEDFlash( int numFlashes )
 
 int _modeCycleHoldTimer = 0;
 
-bool modeCycleCheck( bool button )
+int modeCycleCheck( bool decButton, bool incButton )
 {
-    if ( button )
-    {
-        // Gets called every 4ms or so
+    if ( incButton )
+    {        
         _modeCycleHoldTimer++;
-
-        if ( _modeCycleHoldTimer == 100 )
+        if ( _modeCycleHoldTimer == 4 )
         {
-            return true;
+            return 1;
+        }
+    }
+    else if (decButton )
+    {
+        _modeCycleHoldTimer--;
+        if ( _modeCycleHoldTimer = -4 )
+        {
+            return -1;
         }
     }
     else
@@ -366,7 +383,7 @@ bool modeCycleCheck( bool button )
         _modeCycleHoldTimer = 0;
     }
 
-    return false;
+    return 0;
 }
 
 
@@ -377,13 +394,18 @@ bool modeCycleCheck( bool button )
 void update_gamepad()
 {
     int deadzone = ANALOG_STICK_DEADZONE;
-    int x = _btHIDConn->getGamepadLeftStickXAxis() - 32768;
-    int y = _btHIDConn->getGamepadLeftStickYAxis() - 32768;    
+    int x = _btHIDConn->getGamepadLeftStickXAxis();
+    int y = _btHIDConn->getGamepadLeftStickYAxis();    
+
+    //Serial.printf("%d, %d, %d\n",  _btHIDConn->getGamepadLeftStickXAxis(),  _btHIDConn->getGamepadLeftStickYAxis(),  _btHIDConn->getGamepadHatSwitchDir() ); 
     
     bool joyr = (x> deadzone) || (_btHIDConn->getGamepadDigitalXAxis()>0);
     bool joyl = (x<-deadzone) || (_btHIDConn->getGamepadDigitalXAxis()<0);
     bool joyu = (y<-deadzone) || (_btHIDConn->getGamepadDigitalYAxis()<0);
     bool joyd = (y> deadzone) || (_btHIDConn->getGamepadDigitalYAxis()>0);
+
+    if ( joyr && joyl ) joyr=joyl=false;
+    if ( joyu && joyd ) joyu=joyd=false;
 
     bool btna = _btHIDConn->getGamePadButton(0);    // A on Xbox pad
     bool btnb = _btHIDConn->getGamePadButton(1);    // B on Xbox pad
@@ -403,22 +425,30 @@ void update_gamepad()
 
     digitalWrite(PIN_A, btna); 
     digitalWrite(PIN_B, btnb); 
-
-    // Green LED (green = Xbox color...)
-    _statusLeds.setState(LED_STATUS, LEDMODE_CONTROLLER_ACTIVE);    
+    
+    _statusLeds.setButtonIndicator( btna | btnb );
+    _statusLeds.setState(LED_STATUS, LEDMODE_CONTROLLER_ACTIVE);        
 
     // Check for mode switch (up-to-jumps)
-    if ( modeCycleCheck( _btHIDConn->getGamePadButton(10) ||    // Start or Sel on Xbox pad
-                         _btHIDConn->getGamePadButton(11) ))
+    int inc = modeCycleCheck( _btHIDConn->getGamePadButton(10), _btHIDConn->getGamePadButton(10) || digitalRead(PIN_BTN_MODE)==0 );
+
+    if ( inc!=0 )
     {        
-        _currGamepadMode=(GamepadMode)(_currGamepadMode+1);
+        _currGamepadMode=(GamepadMode)(_currGamepadMode+inc);
+
         if ( _currGamepadMode>=GamepadMode::Invalid )
         {
             _currGamepadMode = GamepadMode::Default;             
         }
-        modeCycleLEDFlash(_currGamepadMode+1);
+        else if (_currGamepadMode<(GamepadMode)0)
+        {
+            _currGamepadMode = (GamepadMode)(GamepadMode::Invalid-1);
+        }
+        
         saveSettings();
     }    
+
+    _statusLeds.setState(LED_MODE, (LEDState)(LED_GAMEPADMODE_0+_currGamepadMode) );
 }
 
 
@@ -434,11 +464,12 @@ int _clampedMouseRateX  = 0;
 int _clampedMouseRateY  = 0;
 int _mouseQuadX         = 0;
 int _mouseQuadY         = 0;
+int _numQuadratureTicks = 0;
 
 const uint8_t quad0[4] = {0,1,1,0};
 const uint8_t quad1[4] = {0,0,1,1};
 
-const int     quadCounterShiftDown = 14;
+const int     quadCounterShiftDown = 12;
 
 void IRAM_ATTR onQuadratureTimer()
 {    
@@ -457,6 +488,8 @@ void IRAM_ATTR onQuadratureTimer()
         digitalWrite(PIN_Y1, quad0[idx]);
         digitalWrite(PIN_Y2, quad1[idx]);
     }    
+
+    _numQuadratureTicks++;
 }
 
 void update_mouse()
@@ -471,16 +504,16 @@ void update_mouse()
     int rmb = _btHIDConn->getMouseButton(1);
 
     // Apply rate scaling here
-    int rate = k_mouseRates[_currMouseRateIdx];
-    _mouseDeltaX += (mx<<4)*rate;
-    _mouseDeltaY += (my<<4)*rate;
+    int rate = k_mouseRates[_currMouseRateIdx];    
 
-    // Consume 1/4 of our reamaining delta per timer tick
-    // Gives a slight smoothing/deceleration
-    _mouseRateX = _mouseDeltaX >> 2;
-    _mouseRateY = _mouseDeltaY >> 2;
-
+    _mouseDeltaX += (mx<<3)*rate;
+    _mouseDeltaY += (my<<3)*rate;
+    
     noInterrupts();
+    int smoothingShift = 1;
+    _mouseRateX = (_mouseDeltaX / _numQuadratureTicks) >> smoothingShift;
+    _mouseRateY = (_mouseDeltaY / _numQuadratureTicks) >> smoothingShift;
+
     // Enforce max rate so we don't skip phases of the quadrature pulse sequence    
     _clampedMouseRateX = _mouseRateX;
     _clampedMouseRateY = _mouseRateY;    
@@ -488,15 +521,18 @@ void update_mouse()
     if ( _clampedMouseRateX <-maxMouseRate ) _clampedMouseRateX = -maxMouseRate;
     if ( _clampedMouseRateY > maxMouseRate ) _clampedMouseRateY =  maxMouseRate;
     if ( _clampedMouseRateY <-maxMouseRate ) _clampedMouseRateY = -maxMouseRate;    
-    interrupts();
+    
 
-    _mouseDeltaX -= _mouseRateX;
+    _mouseDeltaX -= _mouseRateX * _numQuadratureTicks;
     if ( _mouseRateX>0 && _mouseDeltaX<0 ) _mouseDeltaX = 0;
     if ( _mouseRateX<0 && _mouseDeltaX>0 ) _mouseDeltaX = 0;
     
-    _mouseDeltaY -= _mouseRateY;
+    _mouseDeltaY -= _mouseRateY * _numQuadratureTicks;
     if ( _mouseRateY>0 && _mouseDeltaY<0 ) _mouseDeltaY = 0;
     if ( _mouseRateY<0 && _mouseDeltaY>0 ) _mouseDeltaY = 0;
+
+    _numQuadratureTicks = 0;
+    interrupts();
 
     //Serial.printf("MouseXY %d, %d QuadPosXY %d, %d\n", _clampedMouseRateX, _clampedMouseRateY, _mouseQuadX>>(quadCounterShiftDown+2), _mouseQuadY>>(quadCounterShiftDown+2) );
 
@@ -504,10 +540,12 @@ void update_mouse()
     digitalWrite(PIN_B, rmb); 
 
     // White LED for active mouse
+    _statusLeds.setButtonIndicator( lmb | rmb );
     _statusLeds.setState(LED_STATUS, LEDMODE_MOUSE_ACTIVE);    
 
     // Check for mode switch (cycle mouse speeds)
-    if ( modeCycleCheck(_btHIDConn->getMouseButton(2)) )
+    int inc = modeCycleCheck( false, _btHIDConn->getMouseButton(2) || digitalRead(PIN_BTN_MODE)==0 );
+    if ( inc!=0 )
     {        
         _mouseRateX = _mouseRateY = 0;
 
@@ -515,9 +553,11 @@ void update_mouse()
         {
              _currMouseRateIdx = 0;
         }
-        modeCycleLEDFlash(_currMouseRateIdx+1);
+        
         saveSettings();
     }
+
+    _statusLeds.setState(LED_MODE, (LEDState)(LED_MOUSERATE_0+_currMouseRateIdx) );    
 }
 
 

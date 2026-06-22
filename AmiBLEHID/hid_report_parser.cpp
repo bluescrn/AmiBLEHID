@@ -732,14 +732,14 @@ namespace {
 	static void SetInt32Value(int32_t& dest, int32_t v, int32_t logical_min, int32_t logical_max, bool relative) {
         
         // Xbox D-Pad reports as a hat switch with logical min of 1. But when it sends a zero, we want to clear its state to 0
-        bool hatSwitchHack = (logical_min==1 && logical_max==8);
+        bool hatSwitchHack = ((logical_max-logical_min)==7);
 
 		// From the HID specification:
 		//   If the host or the device receives an out-of-range value then
 		//   the current value for the respective control will not be modified.
 		if (IsOutOfRange(v, logical_min, logical_max)) {
-			if (relative || hatSwitchHack)
-				dest = 0;
+            if (relative) dest = 0;
+			if (hatSwitchHack) dest = -1;
 		}
 		else {
 			dest = v;
@@ -750,14 +750,14 @@ namespace {
 	static void SetInt32Value(int32_t& dest, uint32_t v, int32_t logical_min, int32_t logical_max, bool relative) {
 
         // Xbox D-Pad reports as a hat switch with logical min of 1. But when it sends a zero, we want to clear its state to 0
-        bool hatSwitchHack = (logical_min==1 && logical_max==8);
+        bool hatSwitchHack = ((logical_max-logical_min)==7);
 
 		// From the HID specification:
 		//   If the host or the device receives an out-of-range value then
 		//   the current value for the respective control will not be modified.
 		if (IsOutOfRange(v, logical_min, logical_max)) {
-			if (relative || hatSwitchHack)
-				dest = 0;
+			if (relative) dest = 0;
+			if (hatSwitchHack) dest = -1;
 		}
 		else {
 			dest = (int32_t)v;

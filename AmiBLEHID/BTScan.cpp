@@ -5,6 +5,7 @@
 // Initially based on this example: https://github.com/esp32beans/BLE_HID_Client
 // ------------------------------------------------------------------------------------------------------------------------
 
+#include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <BTScan.h>
 
@@ -16,6 +17,8 @@ class BTScanCallbacks: public NimBLEScanCallbacks
 private:
 
     const NimBLEAdvertisedDevice* m_deviceToConnect = nullptr;
+
+    bool m_enableBinding = false;
 
     // --------------------------------------------------------------------------------------------------------------------
     // onDiscovered
@@ -35,27 +38,59 @@ private:
     {
         const char HID_SERVICE[] = "1812";
 
-//        if (  (advertisedDevice->getAdvType() == BLE_HCI_ADV_TYPE_ADV_DIRECT_IND_HD) ||
-//              (advertisedDevice->getAdvType() == BLE_HCI_ADV_TYPE_ADV_DIRECT_IND_LD) )
-        {
-            if (advertisedDevice->isConnectable())
-            {    
-                if ( advertisedDevice->haveServiceUUID() && advertisedDevice->isAdvertisingService(NimBLEUUID(HID_SERVICE)))
+        int advType = advertisedDevice->getAdvType();
+
+        if (advertisedDevice->isConnectable())
+        {    
+            int  numBonds = NimBLEDevice::getNumBonds();
+            bool isBonded = false;
+
+            for (int i = 0; i < numBonds; i++)
+            {                                    
+                if ( NimBLEDevice::getBondedAddress(i) == advertisedDevice->getAddress() )
                 {
-                    Serial.printf("Advertised HID device found: %s\n", advertisedDevice->toString().c_str() );            
+                    isBonded = true;                            
+                }                        
+            }
+            
+            // If we're connected to a bonded device, it may not be advertising with any details, we have to recognise it by address and 
+            // try to connect. This is the case with the Logitech MX Anywhere 3, although most devices seem to advertise with service ID
+            // and other details even once bounded.
+            if (advertisedDevice->haveServiceUUID() || isBonded)
+            {
+                if (advertisedDevice->isAdvertisingService(NimBLEUUID(HID_SERVICE)) || isBonded)
+                {            
+                    if ( isBonded )
+                    {
+                        Serial.printf("AdvType %d: Bonded HID device:   %s\n", advType, advertisedDevice->toString().c_str() );            
+                    }
+                    else
+                    {
+                        Serial.printf("AdvType %d: Unbonded HID device: %s\n", advType, advertisedDevice->toString().c_str() );                                
+                    }
 
-                    // stop scan before connecting
-                    NimBLEDevice::getScan()->stop();
+                    if ( m_enableBinding || isBonded )
+                    {
+                        // stop scan before connecting
+                        NimBLEDevice::getScan()->stop();
 
-                    // Store ref to device
-                    m_deviceToConnect = advertisedDevice;            
-                }    
+                        // Store ref to device
+                        m_deviceToConnect = advertisedDevice;            
+                    }
+                }
                 else
                 {
-                    Serial.printf("Advertised Non-HID device found: %s\n", advertisedDevice->toString().c_str() );            
+                    // No HID service
+                    Serial.printf("AdvType %d: Non-HID device:      %s\n", advType, advertisedDevice->getAddress().toString().c_str() );
                 }
-            }  
+            }    
+            else
+            {
+                // No service ID
+                Serial.printf("AdvType %d: Unknown device:      %s\n", advType, advertisedDevice->getAddress().toString().c_str() );
+            }
         }
+    
     };
 
 
@@ -79,6 +114,23 @@ public:
         m_deviceToConnect = nullptr;
     }
 
+    // --------------------------------------------------------------------------------------------------------------------
+    // enableBinding
+    // --------------------------------------------------------------------------------------------------------------------
+
+    void enableBinding( bool enable )
+    {
+        m_enableBinding = enable;
+    }
+
+    // --------------------------------------------------------------------------------------------------------------------
+    // isBindingEnabled
+    // --------------------------------------------------------------------------------------------------------------------
+
+    bool isBindingEnabled()
+    {
+        return m_enableBinding;
+    }
 
     // --------------------------------------------------------------------------------------------------------------------
     // getDeviceToConnect
@@ -107,7 +159,7 @@ BTScan::BTScan()
     NimBLEDevice::init("");
 
     // Enable bonding    
-    //NimBLEDevice::setSecurityAuth(true, true, false);
+    NimBLEDevice::setSecurityAuth(true, true, false);
 
     // Set the transmit power (+9db), default is 3db
     //NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -123,6 +175,7 @@ BTScan::BTScan()
     //pScan->setWindow(100);
 
     // Active scan will gather scan response data from advertisers but will use more energy from both devices   
+        
     pScan->setActiveScan(true);
 }
 
@@ -154,6 +207,38 @@ void BTScan::start( int scanDurationMillisecs, bool continueScan )
     pScan->start(scanDurationMillisecs, continueScan, !continueScan );
 }
 
+
+// ------------------------------------------------------------------------------------------------------------------------
+// stop
+// ------------------------------------------------------------------------------------------------------------------------
+
+void BTScan::stop()
+{
+    NimBLEScan* pScan = NimBLEDevice::getScan();
+    if ( pScan )
+    {
+        pScan->stop();
+    }
+}
+
+
+// ------------------------------------------------------------------------------------------------------------------------
+// enableBinding
+// ------------------------------------------------------------------------------------------------------------------------
+
+void BTScan::enableBinding( bool enable )
+{
+    m_scanCallbacks->enableBinding( enable );
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// isBindingEnabled
+// --------------------------------------------------------------------------------------------------------------------
+
+bool BTScan::isBindingEnabled()
+{
+    return m_scanCallbacks->isBindingEnabled();
+}
 
 // ------------------------------------------------------------------------------------------------------------------------
 // isScanning

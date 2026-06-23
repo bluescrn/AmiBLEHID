@@ -24,8 +24,10 @@ private:
     hid::BitField<hid::GamepadConfig::NUM_BUTTONS>  m_gamepadButtons;
 	hid::Int32Array<hid::GamepadConfig::NUM_AXES>   m_gamepadAxes;
 
-    HIDAxisScaler m_axisScalerX0;
+    HIDAxisScaler m_axisScalerX0;    
     HIDAxisScaler m_axisScalerY0;
+    HIDAxisScaler m_axisScalerX1;
+    HIDAxisScaler m_axisScalerY1;
     HIDAxisScaler m_axisScalerHat;
 
     int m_mouseDeltaX;
@@ -51,6 +53,8 @@ public:
     int  getGamepadHatSwitchDir();
     int  getGamepadLeftStickXAxis();
     int  getGamepadLeftStickYAxis();
+    int  getGamepadRightStickXAxis();
+    int  getGamepadRightStickYAxis();
     bool getGamePadButton( int idx );
 
     int  getMouseDeltaX();

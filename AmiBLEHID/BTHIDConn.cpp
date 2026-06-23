@@ -365,8 +365,10 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
                     int res = m_parser.Init(cfg_root, descriptorData, descriptorLength );
 
                     // Init axis scalers
-                    m_axisScalerX0.Init(  &cfg.axes.properties[hid::GamepadConfig::X], -256, 256, false );
-                    m_axisScalerY0.Init(  &cfg.axes.properties[hid::GamepadConfig::Y], -256, 256, false );
+                    m_axisScalerX0.Init(  &cfg.axes.properties[hid::GamepadConfig::X],  -256, 256, false );
+                    m_axisScalerY0.Init(  &cfg.axes.properties[hid::GamepadConfig::Y],  -256, 256, false );
+                    m_axisScalerX1.Init(  &cfg.axes.properties[hid::GamepadConfig::Z],  -256, 256, false );
+                    m_axisScalerY1.Init(  &cfg.axes.properties[hid::GamepadConfig::RZ], -256, 256, false );
                     m_axisScalerHat.Init( &cfg.axes.properties[hid::GamepadConfig::HAT_SWITCH], 1, 8, true );
 
                     Serial.printf("Device is Gamepad (reportId Mappings: %d)\n", m_parser.NumMappings());
@@ -517,6 +519,18 @@ int BTHIDConn::getGamepadLeftStickYAxis()
 {
     if (!m_stateValid) return 0;
     return m_axisScalerY0.ScaleValue( m_gamepadAxes[hid::GamepadConfig::Y] ); 
+}
+
+int BTHIDConn::getGamepadRightStickXAxis()
+{    
+    if (!m_stateValid) return 0;
+    return m_axisScalerX1.ScaleValue( m_gamepadAxes[hid::GamepadConfig::Z] ); 
+}
+
+int BTHIDConn::getGamepadRightStickYAxis()
+{    
+    if (!m_stateValid) return 0;
+    return m_axisScalerY1.ScaleValue( m_gamepadAxes[hid::GamepadConfig::RZ] ); 
 }
 
 bool BTHIDConn::getGamePadButton( int idx )

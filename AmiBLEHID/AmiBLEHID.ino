@@ -7,9 +7,10 @@
 // Board should be set to 'ESP32H2 Dev Module'
 // Tools -> USB CDC on boot should be enabled to get serial console output
 //
-// Required libraries:
-// - NimBLE-Arduino (tested with 2.3.7)
-// - FastLED (tested with 3.10.3. 3.10.4 didn't work)
+// Required libraries/packages:
+// - NimBLE-Arduino - works with 2.5.0)
+// - FastLED - works with with 3.10.3 (3.10.4 didn't work)
+// - Works with esp32 board package 3.3.10
 // ------------------------------------------------------------------------------------------------------------------------
 
 #define PIN_U 0
@@ -42,9 +43,10 @@ void IRAM_ATTR onQuadratureTimer();
 // States
 // ------------------------------------------------------------------------------------------------------------------------
 
-#define ANALOG_STICK_DEADZONE 64   // Analog sticks are scaled to a +/-256 range
+#define ANALOG_STICK_DEADZONE 64   // Analog sticks are scaled to a +/-256 range. Big deadzone/threshold when using for digital input
+#define MOUSE_STICK_DEADZONE  40   // Smaller deadzone when using it for mouse
 
-#define NUM_MOUSE_RATES 5
+#define NUM_MOUSE_RATES       5
 
 const int k_mouseRates[NUM_MOUSE_RATES] = {48, 64, 96, 160, 224};
 const int k_defaultMouseRateIdx = 1;
@@ -76,19 +78,33 @@ enum GamepadMode
 // Main vars
 // ------------------------------------------------------------------------------------------------------------------------
 
-Preferences  _preferences;
-BTScan*      _btScan            = nullptr;
-BTHIDConn*   _btHIDConn         = nullptr;
-State        _state             = State_Init;
-int          _scanDuration      = 60*1000;
+Preferences _preferences;
+BTScan*     _btScan             = nullptr;
+BTHIDConn*  _btHIDConn          = nullptr;
+State       _state              = State_Init;
+int         _scanDuration       = 60*1000;
 
-hw_timer_t  *_quadratureTimer   = NULL;
+hw_timer_t *_quadratureTimer    = NULL;
 
-int          _currMouseRateIdx  = 0;
-GamepadMode  _currGamepadMode   = GamepadMode::Default;
+int         _currMouseRateIdx   = 0;
+GamepadMode _currGamepadMode    = GamepadMode::Default;
 
-LEDs         _statusLeds;
-int          _resetHeldTimer    = 0;
+LEDs        _statusLeds;
+int         _resetHeldTimer     = 0;
+
+int         _mouseDeltaX        = 0;
+int         _mouseDeltaY        = 0;
+int         _mouseRateX         = 0;
+int         _mouseRateY         = 0;
+int         _clampedMouseRateX  = 0;
+int         _clampedMouseRateY  = 0;
+int         _mouseQuadX         = 0;
+int         _mouseQuadY         = 0;
+int         _numQuadratureTicks = 0;
+
+const uint8_t quad0[4] = {0,1,1,0};
+const uint8_t quad1[4] = {0,0,1,1};
+const int     quadCounterShiftDown = 12;
 
 // ------------------------------------------------------------------------------------------------------------------------
 // Main setup function
@@ -407,8 +423,8 @@ void update_gamepad()
     if ( joyr && joyl ) joyr=joyl=false;
     if ( joyu && joyd ) joyu=joyd=false;
 
-    bool btna = _btHIDConn->getGamePadButton(0);    // A on Xbox pad
-    bool btnb = _btHIDConn->getGamePadButton(1);    // B on Xbox pad
+    bool btna = _btHIDConn->getGamePadButton(0); // A on Xbox pad
+    bool btnb = _btHIDConn->getGamePadButton(1); // B on Xbox pad
 
     // If in up-to-jump mode, the B button is jump, and up is disabled so it's not accidentally triggered
     // For some games, e.g. with up to climb ladders, we may want to allow up too?
@@ -417,12 +433,59 @@ void update_gamepad()
         joyu = btnb;
         btnb = _btHIDConn->getGamePadButton(3);  // X on Xbox pad
     }
-    
-    digitalWrite(PIN_U, joyu); 
-    digitalWrite(PIN_D, joyd); 
-    digitalWrite(PIN_L, joyl); 
-    digitalWrite(PIN_R, joyr); 
 
+    // More comfortable buttons when using right stick for mouse emulation
+    btna |= _btHIDConn->getGamePadButton(6);     // L Bumper on Xbox pad
+    btnb |= _btHIDConn->getGamePadButton(7);     // R Bumper on Xbox pad
+
+    // Right analog acts as mouse. All we need to do is set the mouse speed, as the timer for the quadrature output
+    // is still running even in gamepad mode. Just don't set the UDLR pins is mouse is active
+    int mx = _btHIDConn->getGamepadRightStickXAxis();
+    int my = _btHIDConn->getGamepadRightStickYAxis();
+
+    Serial.printf("%d, %d, %d\n",  _btHIDConn->getGamepadRightStickXAxis(),  _btHIDConn->getGamepadRightStickYAxis(),  _btHIDConn->getGamepadHatSwitchDir() ); 
+
+    noInterrupts();
+
+    if ( mx>MOUSE_STICK_DEADZONE || mx<-MOUSE_STICK_DEADZONE ||
+         my>MOUSE_STICK_DEADZONE || my<-MOUSE_STICK_DEADZONE )
+    {
+        if ( mx> MOUSE_STICK_DEADZONE ) mx -= MOUSE_STICK_DEADZONE;
+        if ( mx<-MOUSE_STICK_DEADZONE ) mx += MOUSE_STICK_DEADZONE;
+
+        if ( my> MOUSE_STICK_DEADZONE ) my -= MOUSE_STICK_DEADZONE;
+        if ( my<-MOUSE_STICK_DEADZONE ) my += MOUSE_STICK_DEADZONE;
+
+        // Scaling. A 50:50 blend between linear and input squared, 
+        // to increase precision near centre. Pure squared was too much
+        int smx = (mx * mx)>>8;        
+        if ( mx<0 ) smx=-smx;
+        smx = (smx+mx);
+        
+        int smy = (my * my)>>8;
+        if ( my<0 ) smy=-smy;  
+        smy = (smy+my);
+
+        _clampedMouseRateX  = smx;
+        _clampedMouseRateY  = smy;
+    }
+    else
+    {
+        _clampedMouseRateX  = 0;
+        _clampedMouseRateY  = 0;
+
+        digitalWrite(PIN_U, joyu); 
+        digitalWrite(PIN_D, joyd); 
+        digitalWrite(PIN_L, joyl); 
+        digitalWrite(PIN_R, joyr); 
+    }
+
+    interrupts();
+
+    // Buttons are same for mouse/joystick
+    //
+    // Maybe want some debouncing on these to prevent state changes within 1 frame of each other?
+    // Although I suspect low bluetooth polling rates will make that less of a problem
     digitalWrite(PIN_A, btna); 
     digitalWrite(PIN_B, btnb); 
     
@@ -430,7 +493,7 @@ void update_gamepad()
     _statusLeds.setState(LED_STATUS, LEDMODE_CONTROLLER_ACTIVE);        
 
     // Check for mode switch (up-to-jumps)
-    int inc = modeCycleCheck( _btHIDConn->getGamePadButton(10), _btHIDConn->getGamePadButton(10) || digitalRead(PIN_BTN_MODE)==0 );
+    int inc = modeCycleCheck( _btHIDConn->getGamePadButton(10), _btHIDConn->getGamePadButton(11) || digitalRead(PIN_BTN_MODE)==0 );
 
     if ( inc!=0 )
     {        
@@ -455,21 +518,6 @@ void update_gamepad()
 // ------------------------------------------------------------------------------------------------------------------------
 // Mouse Update
 // ------------------------------------------------------------------------------------------------------------------------
-
-int _mouseDeltaX        = 0;
-int _mouseDeltaY        = 0;
-int _mouseRateX         = 0;
-int _mouseRateY         = 0;
-int _clampedMouseRateX  = 0;
-int _clampedMouseRateY  = 0;
-int _mouseQuadX         = 0;
-int _mouseQuadY         = 0;
-int _numQuadratureTicks = 0;
-
-const uint8_t quad0[4] = {0,1,1,0};
-const uint8_t quad1[4] = {0,0,1,1};
-
-const int     quadCounterShiftDown = 12;
 
 void IRAM_ATTR onQuadratureTimer()
 {    

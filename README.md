@@ -22,7 +22,9 @@ There is an existing project, [Unijoysticle](https://github.com/ricardoquesada/u
 
 ## Code
 
-The code side of things is based around [NimBLE Arduino](https://docs.arduino.cc/libraries/nimble-arduino/) and [this HID report parsing code](https://github.com/pasztorpisti/hid-report-parser)
+The code side of things is based around [NimBLE Arduino](https://docs.arduino.cc/libraries/nimble-arduino/) and [this HID report parsing code](https://github.com/pasztorpisti/hid-report-parser), and can be built in the Arduino IDE
+
+Had to add a little bodge to the HID parser to read the hat switch (d-pad) properly, as the neutral position of a hat switch (usually 0 or -1 depending on device) is outside the logical_min/max range of the axis, and the parser was ignoring out-of-range values.
 
 ## Limitations
 

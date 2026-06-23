@@ -1,8 +1,8 @@
 # AmiBLEHID
 
-Work in progress. Current PCB revision is untested.
+Work in progress. v0.3 PCB works. v0.4 is experimental+untested.
 
-I have a working prototype but rearranged the board and added the buttons+LEDs.
+Previous prototype:
 
 ![Pic of prototype](/assets/images/prototype.jpeg)
 
@@ -14,22 +14,31 @@ The H2 has no wifi, and only supports BLE (no Bluetooth Classic). Other ESP32 mo
 
 There is an existing project, [Unijoysticle](https://github.com/ricardoquesada/unijoysticle2), that uses an ESP32-WROOM32 and provides compatibility with far more devices by supporting Bluetooth Classic, but it's a relatively bulky board and requires external power. This is an attempt to build a smaller neater 'dongle' using the same approach, albeit with more limited functionality.
 
+## Features
+
+- Mouse speed control (cycle 5 levels via button on board, or hold middle mouse button)
+- Mouse emulation using right analog stick when using a controller and Amiga joystick port 1
+- 'Up-to-jump' mode - Maps the 2nd button to joystick up
+
 ## Code
 
 The code side of things is based around [NimBLE Arduino](https://docs.arduino.cc/libraries/nimble-arduino/) and [this HID report parsing code](https://github.com/pasztorpisti/hid-report-parser)
 
 ## Limitations
 
-BLE game controllers are very uncommon, the only common one that I'm aware of is the latest model of Xbox controller, which works well. Would love to know if there's any more good ones out there.
+BLE game controllers are very uncommon, the only common+good ones that I'm aware of are the latest model of Xbox controller and the 8BitDo Ultimate Wireless 2.
   
-Only supports two joystick/mouse buttons. Supporting the CD32 button protocol would significantly complicate things. And using a single 74HC05 limits it to 6 outputs at the moment (4 directions, 2 buttons)
+Only supports two joystick/mouse buttons. Investigating
 
 The USB-C port on the ESP32 module isn't currently supported for wired mice/controllers. Would be nice to support that, but the additional current draw may well be too much for the Amiga joystick port
 
-## Compatible/Tested devices
+## Tested+Compatible devices
 
-Not many yet:
+Controllers:
+- Xbox Series S/X controller (this is the version with USB-C and the extra 'share' button in the centre. Previous versions aren't BLE)
+- 8BitDo Ultimate 2 Wireless
 
-Xbox Series S/X controller - Works well (this is the version with USB-C and the extra 'share' button in the centre. Previous versions aren't BLE)
-KeyChron M3 Wireless Mouse - Works well
-Logitech MX Anywhere 3 - Works but doesn't stay paired (Need to investigate further)
+Mice:
+- KeyChron M3 Wireless Mouse
+- Logitech MX Anywhere 3
+- Razer Atheris

@@ -2,7 +2,7 @@
 
 Work in progress. v0.3 PCB works. v0.4 is experimental+untested.
 
-Previous prototype:
+First prototype, before addition of buttons+LEDs:
 
 ![Pic of prototype](/assets/images/prototype.jpeg)
 
@@ -30,7 +30,7 @@ BLE game controllers are very uncommon, the only common+good ones that I'm aware
   
 Only supports two joystick/mouse buttons. Investigating
 
-The USB-C port on the ESP32 module isn't currently supported for wired mice/controllers. Would be nice to support that, but the additional current draw may well be too much for the Amiga joystick port
+The USB-C port on the ESP32 module isn't currently supported for wired mice/controllers. Would be nice to support wired controllers, but the additional current draw is likely to be too much for the Amiga joystick port
 
 ## Tested+Compatible devices
 

@@ -81,10 +81,14 @@ void LEDs::process()
                 col = 0x0000ff;
                 break;
 
-            case LEDMODE_CONTROLLER_ACTIVE:
+            case LEDMODE_CONTROLLER_ACTIVE:            
                 col = _buttonPressed ? 0x006000 : 0x002000;     // dim green
                 break;
 
+            case LEDMODE_CD32CONTROLLER_ACTIVE:
+                col = _buttonPressed ? 0x300050 : 0x100020;     // dim purple
+                break;
+                 
             case LEDMODE_MOUSE_ACTIVE:
                 col = _buttonPressed ? 0x006060 : 0x002020;     // dim blue
                 break;
@@ -120,7 +124,8 @@ void LEDs::process()
         _leds[led] = col;
     }
 
-    FastLED.show();   
+//    Hmm, is this not needed? Seems to be updating without?
+//    FastLED.show();   
 }
 
 

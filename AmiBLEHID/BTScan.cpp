@@ -174,8 +174,7 @@ BTScan::BTScan()
     //pScan->setInterval(100);
     //pScan->setWindow(100);
 
-    // Active scan will gather scan response data from advertisers but will use more energy from both devices   
-        
+    // Active scan will gather scan response data from advertisers but will use more energy from both devices        
     pScan->setActiveScan(true);
 }
 

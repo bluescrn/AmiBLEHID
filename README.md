@@ -3,7 +3,7 @@
 Work in progress, but now fairly functional. Needs a better name.
 
 ![Pic of prototype](/assets/images/prototype4.jpeg)
-*Latest iteration, v4 PCB with extra diodes to enable experimental CD32 protocol support*
+*Latest iteration, v0.4 PCB with extra diodes to enable experimental CD32 protocol support, and one with a 3D printed shell*
 
 ## What is it?
 

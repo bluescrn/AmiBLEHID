@@ -2,13 +2,12 @@
 
 Work in progress, but now fairly functional. Needs a better name.
 
-Latest iteration, v4 PCB with extra diodes to enable experimental CD32 protocol support
-
 ![Pic of prototype](/assets/images/prototype4.jpeg)
+*Latest iteration, v4 PCB with extra diodes to enable experimental CD32 protocol support*
 
 ## What is it?
 
-With minimal other components (essentially just a [74HC05](https://www.build-electronic-circuits.com/7400-series-integrated-circuits/74hc05-74ls05/) and the joystick port connector), an ESP32-H2 module can be connected to an Amiga joystick/mouse port, and allow a BLE mouse or controller to be used with the Amiga.
+With minimal other components (essentially just a [74HC05](https://www.build-electronic-circuits.com/7400-series-integrated-circuits/74hc05-74ls05/) and the joystick port connector), an ESP32-H2 module can be connected to an Amiga joystick/mouse port, and allow a Bluetooth LE mouse or controller to be used with the Amiga.
 
 There is an existing project, [Unijoysticle](https://github.com/ricardoquesada/unijoysticle2), that uses an ESP32-WROOM32 and provides compatibility with far more devices by supporting Bluetooth Classic, but it's a relatively bulky board and I believe it requires external power. This is an attempt to build a smaller neater single-port 'dongle' using the same approach, albeit with more limited functionality.
 

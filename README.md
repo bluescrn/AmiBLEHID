@@ -8,9 +8,9 @@ Latest iteration, v4 PCB with extra diodes to enable experimental CD32 protocol 
 
 ## What is it?
 
-With minimal other components (essentially just a 74HC05 and the joystick port connector), an ESP32-H2 module can be connected to an Amiga joystick/mouse port, and allow a BLE mouse or controller to be used with the Amiga.
+With minimal other components (essentially just a [74HC05](https://www.build-electronic-circuits.com/7400-series-integrated-circuits/74hc05-74ls05/) and the joystick port connector), an ESP32-H2 module can be connected to an Amiga joystick/mouse port, and allow a BLE mouse or controller to be used with the Amiga.
 
-There is an existing project, [Unijoysticle](https://github.com/ricardoquesada/unijoysticle2), that uses an ESP32-WROOM32 and provides compatibility with far more devices by supporting Bluetooth Classic, but it's a relatively bulky board and requires external power. This is an attempt to build a smaller neater 'dongle' using the same approach, albeit with more limited functionality.
+There is an existing project, [Unijoysticle](https://github.com/ricardoquesada/unijoysticle2), that uses an ESP32-WROOM32 and provides compatibility with far more devices by supporting Bluetooth Classic, but it's a relatively bulky board and I believe it requires external power. This is an attempt to build a smaller neater single-port 'dongle' using the same approach, albeit with more limited functionality.
 
 The H2 has no wifi, and only supports BLE (no Bluetooth Classic). Other ESP32 modules likely draw too much current. With the latest revision, I measured power consumption as between 22mA and 34mA, depending on the amount of BLE activity.
 
@@ -94,4 +94,17 @@ One thought I'd had is that it would make sense to re-use the well-understood CD
 But that'd require a custom driver, likely a modified version of the [TankMouse]( https://aminet.net/package/driver/input/TankMouse) driver
 
 But there's no point attempting any of that unless I can get more robust CD32 support working by using high-priority interrupts...
+
+## BOM
+
+1x [Waveshare ESP32-H2 Mini](https://www.waveshare.com/esp32-h2-zero.htm)
+1x 74HC05 open-collector hex inverter (SOIC)
+2x Micro tactile pushbutton switch (4.5x4.5x4.5mm)
+2x WS2812B RGB LEDs (3535 size)
+1x 9-pin female D-Sub connector (solder bucket connections)
+2x 1N4148 diodes (SOD-123)
+1x 470 ohm resistor (3216 Metric)
+
+The LEDs are likely the trickiest part to source as the larger 5050 size are more common. I'd bought a load from AliExpress for another project so already had some.
+
 

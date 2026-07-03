@@ -83,7 +83,7 @@ I've been testing CD32 support with [Joytest_CP](https://aminet.net/package/driv
 
 ## USB controllers?
 
-The ESP32-H2 board has a USB-C connector. It would be nice if it could also support wired USB controller, but power draw would likely be too much (especially controllers with rumble motors and RGB lighting). So don't try plugging anything in when it's connected to the Amiga unless you're connecting it to a PC for programming/debug output.
+The ESP32-H2 board has a USB-C connector. It would be nice if it could also support wired USB controller, but I don't think the ESP32-H2 can function as a USB host, and if it could, power draw would likely be too much (especially controllers with rumble motors and RGB lighting). So don't try plugging anything in when it's connected to the Amiga unless you're connecting it to a PC for programming/debug output.
 
 ## Mouse Wheels?
 

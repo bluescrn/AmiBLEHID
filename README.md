@@ -99,7 +99,7 @@ But there's no point attempting any of that unless I can get more robust CD32 su
 
 |Qty|Component|
 |--|----|
-|1x|[Waveshare ESP32-H2 Mini](https://www.waveshare.com/esp32-h2-zero.htm)|
+|1x|[Waveshare ESP32-H2 Zero](https://www.waveshare.com/esp32-h2-zero.htm)|
 |1x|74HC05 open-collector hex inverter (SOIC)|
 |2x|Micro tactile pushbutton switch (4.5x4.5x4.5mm)|
 |2x|WS2812B RGB LEDs (3535 size)|

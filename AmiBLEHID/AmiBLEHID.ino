@@ -281,6 +281,11 @@ void loop ()
                     else
                     {
                         Serial.println("Failed to connect, resuming scan!");                        
+
+                        _statusLeds.setState(LED_STATUS, LEDMODE_DISCONNECTED);
+                        _statusLeds.setState(LED_MODE,   LEDMODE_DISCONNECTED);        
+                        delayWithLEDUpdates(750);
+                        
                         _btScan->start( _scanDuration, true );
                     }
                 }            

@@ -97,13 +97,15 @@ But there's no point attempting any of that unless I can get more robust CD32 su
 
 ## BOM
 
-1x [Waveshare ESP32-H2 Mini](https://www.waveshare.com/esp32-h2-zero.htm)
-1x 74HC05 open-collector hex inverter (SOIC)
-2x Micro tactile pushbutton switch (4.5x4.5x4.5mm)
-2x WS2812B RGB LEDs (3535 size)
-1x 9-pin female D-Sub connector (solder bucket connections)
-2x 1N4148 diodes (SOD-123)
-1x 470 ohm resistor (3216 Metric)
+|Qty|Component|
+|--|----|
+|1x|[Waveshare ESP32-H2 Mini](https://www.waveshare.com/esp32-h2-zero.htm)|
+|1x|74HC05 open-collector hex inverter (SOIC)|
+|2x|Micro tactile pushbutton switch (4.5x4.5x4.5mm)|
+|2x|WS2812B RGB LEDs (3535 size)|
+|1x|9-pin female D-Sub connector (solder bucket connections)|
+|2x|1N4148 diodes (SOD-123)|
+|1x|470 ohm resistor (3216 Metric)|
 
 The LEDs are likely the trickiest part to source as the larger 5050 size are more common. I'd bought a load from AliExpress for another project so already had some.
 

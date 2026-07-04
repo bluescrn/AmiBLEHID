@@ -40,6 +40,10 @@
 #include <Preferences.h>
 #include <LEDs.h>
 
+#include "esp_attr.h"
+#include "soc/gpio_struct.h"
+#include "hal/gpio_ll.h"   
+
 void IRAM_ATTR onQuadratureTimer();
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -384,8 +388,7 @@ void loop ()
         _btScan->enableBinding ( true );
         _btScan->start( _scanDuration, false );            
         _resetHeldTimer = 0;
-    }    
-
+    }       
 }
 
 
@@ -424,88 +427,115 @@ int modeCycleCheck( bool decButton, bool incButton )
 // This was an attempt to minimize the impact of interrupt latency by shifting the data bits out in a tight
 // loop within this ISR rather than trigger another interrupt from the clock pin. Don't think it's made a lot
 // of difference though, as jittery latency on the triggering of this ISR can throw off the timing
-//#define CD32_SHIFT_POLLING
+//
+// I suspect the core problem is Bluetooth using higher-priority interrupts.
+//
+// #define CD32_SHIFT_POLLING
 
-static void IRAM_ATTR cd32_latch_isr(void *arg)
-{
-    if ( !digitalRead( PIN_CD32_LATCH ) )
-    {                   
-        // Must zero this pin as it's the clock input
-        digitalWrite(PIN_A, 0);
+static void IRAM_ATTR gpio_isr( void* arg )
+{    
+    uint32_t intr_status = GPIO.status.val; 
 
-        // Copy button state to shift reg var, output first bit
-        digitalWrite(PIN_B, _cd32buttonState&1 );
+    if (intr_status & (1 << PIN_CD32_LATCH)) 
+    {     
+        GPIO.status_w1tc.val = (1 << PIN_CD32_LATCH);
 
-        _cd32ButtonShiftRegister = _cd32buttonState>>1;                
-        _cd32Polling             = true;
-        _cd32ticksSincePolled    = 0;
-
-#ifdef CD32_SHIFT_POLLING        
-        // Loop until all bits haev been shifted out, or uintil our failsafe counter hits zero. 
-        int  failsafe  = 500;
-        int  shiftBits = 6;
-        bool prevClock = false;
-        
-        while(failsafe>0 && shiftBits>0)
+        if ( _cd32Polling )
         {
-            failsafe--;
-            bool clock = digitalRead(PIN_CD32_CLOCK);
-            if ( prevClock !=clock )
+            // Restore standard button state        
+            // (Doesn't seem necessary, as main loop will restore it every few milliseconds?)
+            if (_cd32buttonState&1) GPIO.out_w1ts.val = (1 << PIN_B); else GPIO.out_w1tc.val = (1 << PIN_B);
+            if (_cd32buttonState&2) GPIO.out_w1ts.val = (1 << PIN_A); else GPIO.out_w1tc.val = (1 << PIN_A);
+
+            _cd32Polling = false;
+        }   
+        else if ( !(GPIO.in.val & (1<<PIN_CD32_LATCH )) )
+        {   
+            // Must zero this pin as it's the clock input
+            GPIO.out_w1tc.val = (1 << PIN_A);
+                            
+            // Copy button state to shift reg var, output first bit
+            if (_cd32buttonState&1) 
+                GPIO.out_w1ts.val = (1 << PIN_B);
+            else
+                GPIO.out_w1tc.val = (1 << PIN_B);
+                        
+            _cd32ButtonShiftRegister = _cd32buttonState>>1;                
+            _cd32Polling             = true;
+            _cd32ticksSincePolled    = 0;
+
+#ifdef CD32_SHIFT_POLLING
+            // Loop until all bits have been shifted out, or uintil our failsafe counter hits zero. 
+            int  failsafe  = 500;
+            int  shiftBits = 6;
+            bool prevClock = false;
+        
+            while(failsafe>0 && shiftBits>0)
             {
-                if ( !clock )
+                failsafe--;
+                bool clock = GPIO.in.val & (1<<PIN_CD32_CLOCK);
+                if ( prevClock !=clock )
                 {
-                    digitalWrite(PIN_B, (_cd32ButtonShiftRegister&1) );         
-                    _cd32ButtonShiftRegister>>=1;
-                    shiftBits--;                    
+                    if ( !clock )
+                    {
+                        if (_cd32ButtonShiftRegister&1) GPIO.out_w1ts.val = (1 << PIN_B); else GPIO.out_w1tc.val = (1 << PIN_B);                        
+                        _cd32ButtonShiftRegister>>=1;
+                        shiftBits--;                    
+                    }
+
+                    prevClock = clock;
                 }
-
-                prevClock = clock;
-            }
-        }        
-#endif
-
+            }        
+#endif           
+        }               
     }
-    else
-    {
-        // Restore standard button state        
-        digitalWrite(PIN_B, (_cd32buttonState&1) ? 1 : 0 );
-        digitalWrite(PIN_A, (_cd32buttonState&2) ? 1 : 0 );
-        _cd32Polling = false;
-    }     
+
+#ifndef CD32_SHIFT_POLLING        
+    if (intr_status & (1 << PIN_CD32_CLOCK)) 
+    {    
+        GPIO.status_w1tc.val = (1 << PIN_CD32_CLOCK);
+
+        if ( _cd32Polling )
+        {
+            if (_cd32ButtonShiftRegister&1) 
+               GPIO.out_w1ts.val = (1 << PIN_B);
+            else
+               GPIO.out_w1tc.val = (1 << PIN_B);
+            
+            _cd32ButtonShiftRegister>>=1;        
+        }        
+    }
+#endif    
+
 }
 
-static void IRAM_ATTR cd32_clock_isr( void* arg )
-{        
-    digitalWrite(PIN_B, (_cd32ButtonShiftRegister&1) );         
-    _cd32ButtonShiftRegister>>=1;
-}
-
+intr_handle_t my_intr_handle = NULL;
 
 void setupInterrupts()
 {
-    // Using ESP-IDF functions to set up ISRs may reduce latency slightly over the Arduino wrapper
-    gpio_install_isr_service( ESP_INTR_FLAG_LEVEL3 );
+    esp_intr_alloc( ETS_GPIO_INTR_SOURCE, 
+                    ESP_INTR_FLAG_LEVEL3 | ESP_INTR_FLAG_IRAM, 
+                    gpio_isr, 
+                    NULL, 
+                    &my_intr_handle );
 
     gpio_config_t io_conf;
     io_conf.pin_bit_mask = (1ULL << (gpio_num_t)PIN_CD32_LATCH);
     io_conf.mode         = GPIO_MODE_INPUT;  
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en   = GPIO_PULLUP_ENABLE;
-    io_conf.intr_type    = GPIO_INTR_ANYEDGE;
-        
+    io_conf.intr_type    = GPIO_INTR_ANYEDGE;        
     gpio_config(&io_conf);    
-    gpio_isr_handler_add((gpio_num_t)PIN_CD32_LATCH, cd32_latch_isr, NULL);
 
 #ifndef CD32_SHIFT_POLLING
     io_conf.pin_bit_mask = (1ULL << (gpio_num_t)PIN_CD32_CLOCK);
     io_conf.mode         = GPIO_MODE_INPUT;  
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en   = GPIO_PULLUP_ENABLE;
-    io_conf.intr_type    = GPIO_INTR_NEGEDGE;
-        
+    io_conf.intr_type    = GPIO_INTR_NEGEDGE;        
     gpio_config(&io_conf);    
-    gpio_isr_handler_add((gpio_num_t)PIN_CD32_CLOCK, cd32_clock_isr, NULL);
-#endif            
+#endif    
+
 }
 
 
@@ -535,8 +565,9 @@ void update_gamepad()
     int x = _btHIDConn->getGamepadLeftStickXAxis();
     int y = _btHIDConn->getGamepadLeftStickYAxis();    
 
-    //Serial.printf("%d, %d, %d\n",  _btHIDConn->getGamepadLeftStickXAxis(),  _btHIDConn->getGamepadLeftStickYAxis(),  _btHIDConn->getGamepadHatSwitchDir() ); 
-    
+
+    //Serial.printf("%d, %d, %d\n",  _btHIDConn->getGamepadLeftStickXAxis(),  _btHIDConn->getGamepadLeftStickYAxis(),  _btHIDConn->getGamepadHatSwitchDir() );   
+
     bool joyr = (x> deadzone) || (_btHIDConn->getGamepadDigitalXAxis()>0);
     bool joyl = (x<-deadzone) || (_btHIDConn->getGamepadDigitalXAxis()<0);
     bool joyu = (y<-deadzone) || (_btHIDConn->getGamepadDigitalYAxis()<0);

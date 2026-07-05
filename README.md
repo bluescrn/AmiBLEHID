@@ -74,11 +74,17 @@ There is an initial attempt to support this. The status LED will switch from gre
 
 But emulating the shift register behaviour in code requires quite responsive interrupts, and regular ESP32 interrupts (written in C and via the Arduino ESP32 framework) on the H2 (single-core 96MHz RISC-V) aren't quite fast/stable enough for this. While it's mostly functional, there are currently some dropped and spurious button inputs picked up due to the interrupts being delayed.
 
-In theory, this should be resolvable in software by moving the codebase to ESP-IDF and using a high-priority interrupt - but this requires the interrupt handler to be written in assembly language. But currently I've got no experience with ESP-IDF or RISC-V assembly.
+It looked like this should be resolvable in software by moving everything to ESP-IDF and using a high-priority interrupt (written in assembly language), but that solution only applies to Xtensa-based ESP32s, no the RISC-V-based ESP32-H2.
 
 I've been testing CD32 support with [Joytest_CP](https://aminet.net/package/driver/input/joytest_CP) and also with [Cecconoid](https://thalamusdigital.itch.io/cecconoid-amiga).
 
 ([JoyPortTest](https://aminet.net/package/driver/input/JoyPortTest.lha) doesn't pick up CD32 buttons. Not sure why, maybe it's trying to read too fast as I'm using an A1200 with a PiStorm?)
+
+Update: After investigating further with an oscilloscope, I could see that Joytest CP actually samples the CD32 buttons 7 times in rapid succession, once per call to the Blitz Basic 'JoyB()' function. It's a bit more stable if only sampling it once per frame, triggering a lot fewer interrupts. Could also see that responding to the rising edge of the clock signal was better than the falling edge, giving the interrupt slightly more time to respond. But I could also see that every now and again, pulses would shift by the duration of a whole pulse or more - there's definitely something delaying the response to the GPIO interrupts - I'm guessing at critical sections or higher-priority interrupts relating to Bluetooth, but don't know for sure and don't have any solid ideas to improve it further on the software side yet. 
+
+![Oscillscope trace of CD32 protocol clock and response from the ISR](/assets/images/cd32proto.png)
+
+Image shows the normal case when it's working well - The ISR seems to be responding within a few microseconds most of the time, but sometimes the output pulses are delayed quite significantly.
 
 ## USB controllers?
 

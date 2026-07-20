@@ -32,7 +32,7 @@ Had to add a little bodge to the HID parser to read the hat switch (d-pad) prope
 
 BLE game controllers are very uncommon, the only common+good ones that I'm aware of are the latest model of Xbox controller and the 8BitDo Ultimate Wireless 2.
   
-~~Only supports two joystick/mouse buttons~~. Now has experimental CD32 protocol support. Functional enough for casual gaming, but a little bit glitch (dropped/spurious button presses).
+~~Only supports two joystick/mouse buttons~~. Now has mostly-functional CD32 protocol support. Good enough for casual gaming, but a little bit glitchy (dropped/spurious button presses) due to issues with ESP32 interrupt timing stability.
 
 The USB-C port on the ESP32 module isn't currently supported for wired mice/controllers. Would be nice to support wired controllers, but the additional current draw is likely to be too much for the Amiga joystick port
 

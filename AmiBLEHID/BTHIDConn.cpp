@@ -1,3 +1,4 @@
+#include "hid_report_parser.h"
 // ------------------------------------------------------------------------------------------------------------------------
 // BTHIDConn.cpp
 // Class to handle the current bluetooth HID connection
@@ -96,6 +97,10 @@ public:
 BTHIDConn::BTHIDConn()
 {
     m_clientCallbacks = new BTClientCallbacks();
+    
+    m_mouseDeltaX     = 0;
+    m_mouseDeltaY     = 0; 
+    m_mouseDeltaWheel = 0;
 }
 
 
@@ -125,18 +130,22 @@ void BTHIDConn::notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic, uint
 
     if ( isMouse() )
     {
-        m_mouseDeltaX += m_mouseAxes[hid::MouseConfig::X];
-        m_mouseDeltaY += m_mouseAxes[hid::MouseConfig::Y];
+        m_mouseDeltaX     += m_mouseAxes[hid::MouseConfig::X];
+        m_mouseDeltaY     += m_mouseAxes[hid::MouseConfig::Y];
+        m_mouseDeltaWheel += m_mouseAxes[hid::MouseConfig::V_SCROLL];
     }
       
 #ifdef FULL_LOGGING      
-    Serial.printf( "HID reportId %d, parseResult %d, Data: ", reportId,res );
-    for (size_t i = 0; i < length; i++) 
+    if (Serial) 
     {
-        Serial.print(pData[i], HEX);
-        Serial.print(',');
+        Serial.printf( "HID reportId %d, parseResult %d, Data: ", reportId,res );
+        for (size_t i = 0; i < length; i++) 
+        {
+            Serial.print(pData[i], HEX);
+            Serial.print(',');
+        }
+        Serial.println();     
     }
-    Serial.println();     
 #endif    
 }
 
@@ -169,7 +178,7 @@ void BTHIDConn::deleteAllBonds()
 
     if (numBonds>0)
     {
-        Serial.printf("NimBLEDevice::deleteAllBonds() left %d bonds present\n", numBonds );
+        if (Serial) Serial.printf("NimBLEDevice::deleteAllBonds() left %d bonds present\n", numBonds );
 
         for( int i=0; i<numBonds;i++ )
         {
@@ -183,7 +192,7 @@ void BTHIDConn::deleteAllBonds()
             if ( !success )
             {
                 // Can't delete bonds while still connected/scanning. That's the most likely cause if this happens again
-                Serial.printf("Failed to delete bond %d: %s\n", i, bondedAddresses[i].toString().c_str()  );
+                if (Serial) Serial.printf("Failed to delete bond %d: %s\n", i, bondedAddresses[i].toString().c_str()  );
             }
         }
     }
@@ -220,11 +229,11 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
             if ( NimBLEDevice::getBondedAddress(i) == device->getAddress() )
             {
                 isBonded = true;
-                Serial.printf("- Bonded client %d: %s <-- Connecting\n", i, addr.c_str() );            
+                if (Serial) Serial.printf("- Bonded client %d: %s <-- Connecting\n", i, addr.c_str() );            
             }
             else
             {
-                Serial.printf("- Bonded client %d: %s\n", i, addr.c_str() );
+                if (Serial) Serial.printf("- Bonded client %d: %s\n", i, addr.c_str() );
             }            
         }
     }
@@ -241,12 +250,12 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
         {
             if(!pClient->connect(device, false)) 
             {
-                Serial.println("Reconnect failed");
+                if (Serial) Serial.println("Reconnect failed");
                 return false;
             }
             else
             {
-                Serial.println("Reconnected client");
+                if (Serial) Serial.println("Reconnected client");
             }
         }        
         else
@@ -257,7 +266,7 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
             
             if(pClient)
             {
-                Serial.println("Found disconnected client");
+                if (Serial) Serial.println("Found disconnected client");
             }
         }        
     }
@@ -267,7 +276,7 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
     {
         if(NimBLEDevice::getNumBonds() >= NIMBLE_MAX_CONNECTIONS) 
         {            
-            Serial.println("Max clients reached! Full reset, clearing all bonded clients");
+            if (Serial) Serial.println("Max clients reached! Full reset, clearing all bonded clients");
             deleteAllBonds();
         }
 
@@ -298,12 +307,12 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
     {
         if (!pClient->connect(device)) 
         {
-            Serial.println("Failed to connect");
+            if (Serial) Serial.println("Failed to connect");
             return false;
         }
     }
 
-    Serial.printf("Connected to: %s RSSI: %d\n", pClient->getPeerAddress().toString().c_str(), pClient->getRssi());
+    if (Serial) Serial.printf("Connected to: %s RSSI: %d\n", pClient->getPeerAddress().toString().c_str(), pClient->getRssi());
 
     // Now we can read/write/subscribe the charateristics of the services we are interested in
     NimBLERemoteService*        pSvc = nullptr;
@@ -330,7 +339,7 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
 
                 if ( value.empty() )
                 {
-                    Serial.println("Connection failed: failed to read HID REPORT MAP value!");
+                    if (Serial) Serial.println("Connection failed: failed to read HID REPORT MAP value!");
                     pClient->disconnect();
                     return false;
                 }
@@ -339,16 +348,19 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
                 int      descriptorLength = value.length();
 
 #ifdef FULL_LOGGING
-                Serial.print("HID_REPORT_MAP ");
-                Serial.print(pChr->getUUID().toString().c_str());
-                Serial.print(" Value: ");
-
-                for (size_t i = 0; i < value.length(); i++) 
+                if (Serial) 
                 {
-                    Serial.print(descriptorData[i], HEX);
-                    Serial.print(',');
+                    Serial.print("HID_REPORT_MAP ");
+                    Serial.print(pChr->getUUID().toString().c_str());
+                    Serial.print(" Value: ");
+
+                    for (size_t i = 0; i < value.length(); i++) 
+                    {
+                        Serial.print(descriptorData[i], HEX);
+                        Serial.print(',');
+                    }
+                    Serial.println();                
                 }
-                Serial.println();                
 #endif
 
                 m_deviceTypes =  hid::detect_common_input_device_type( descriptorData, descriptorLength );
@@ -371,7 +383,7 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
                     m_axisScalerY1.Init(  &cfg.axes.properties[hid::GamepadConfig::RZ], -256, 256, false );
                     m_axisScalerHat.Init( &cfg.axes.properties[hid::GamepadConfig::HAT_SWITCH], 1, 8, true );
 
-                    Serial.printf("Device is Gamepad (reportId Mappings: %d)\n", m_parser.NumMappings());
+                    if (Serial) Serial.printf("Device is Gamepad (reportId Mappings: %d)\n", m_parser.NumMappings());
                     parserOk = (res==0);                    
                 }
                 else if (m_deviceTypes & hid::FLAG_MOUSE)
@@ -381,36 +393,36 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
                     auto axes_ref = m_mouseAxes.Ref();  
                     auto cfg_root = cfg.Init( &buttons_ref, &axes_ref, true );
                     int res = m_parser.Init(cfg_root, descriptorData, descriptorLength );
-                    Serial.printf("Device is mouse (reportId Mappings: %d)\n", m_parser.NumMappings());
+                    if (Serial) Serial.printf("Device is mouse (reportId Mappings: %d)\n", m_parser.NumMappings());
                     parserOk = (res==0);                    
                 }
                 else
                 {
-                    Serial.printf("Unexpected device type. Can't init parser. Disconnecting");
+                    if (Serial) Serial.printf("Unexpected device type. Can't init parser. Disconnecting");
                     pClient->disconnect();
                     return false;                    
                 }                
 
                 if (!parserOk)            
                 {
-                    Serial.printf("Parser init returned error. Disconnecting");
+                    if (Serial) Serial.printf("Parser init returned error. Disconnecting");
                     pClient->disconnect();
                 }
                 else
                 {
-                    Serial.println("HID Report descriptor parsed OK");
+                    if (Serial) Serial.println("HID Report descriptor parsed OK");
                 }
             }
             else 
             {
-                Serial.println("Connection failed: HID REPORT MAP can't be read!");
+                if (Serial) Serial.println("Connection failed: HID REPORT MAP can't be read!");
                 pClient->disconnect();
                 return false;
             }
         }
         else 
         {
-            Serial.println("Connection failed: HID REPORT MAP not found!");
+            if (Serial) Serial.println("Connection failed: HID REPORT MAP not found!");
             pClient->disconnect();
             return false;
         }
@@ -436,13 +448,12 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
                         {
                             uint8_t reportId = reportIdAttribVal.data()[0];                                                
 
-                            Serial.printf("Subscribing to notifications for UUID %s (handle:%d reportID:%d)\n", it->getUUID().toString().c_str(), it->getHandle(), reportId );
-                            //Serial.printf( "%s (reportId = %d)\n", it->toString().c_str(), reportId );
+                            if (Serial) Serial.printf("Subscribing to notifications for UUID %s (handle:%d reportID:%d)\n", it->getUUID().toString().c_str(), it->getHandle(), reportId );                            
 
                             if(!it->subscribe(true, [=,this](NimBLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) { notifyCB(pRemoteCharacteristic, pData, length, reportId, isNotify); } )) 
                             {
                                 // Disconnect if subscribe failed 
-                                Serial.println("Connection failed: Subscribe notification failed!");
+                                if (Serial) Serial.println("Connection failed: Subscribe notification failed!");
                                 pClient->disconnect();
                                 return false;
                             }
@@ -459,7 +470,7 @@ bool BTHIDConn::connect( const NimBLEAdvertisedDevice* device )
   
     if ( subscribeCount>0 )
     {
-        Serial.printf("Successfully connected and subscribed to %d notification(s)\n", subscribeCount );
+        if (Serial) Serial.printf("Successfully connected and subscribed to %d notification(s)\n", subscribeCount );
     }
 
     return true;
@@ -548,9 +559,14 @@ int BTHIDConn::getMouseDeltaY()
     return m_mouseDeltaY;
 }
 
+int BTHIDConn::getMouseDeltaWheel()
+{
+    return m_mouseDeltaWheel;
+}
+
 void BTHIDConn::resetMouseDeltas()
 {
-    m_mouseDeltaX = m_mouseDeltaY = 0;
+    m_mouseDeltaX = m_mouseDeltaY = m_mouseDeltaWheel = 0;
 }
 
 bool BTHIDConn::getMouseButton( int idx )

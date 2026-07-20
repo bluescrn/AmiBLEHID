@@ -50,6 +50,9 @@ void IRAM_ATTR onQuadratureTimer();
 // States
 // ------------------------------------------------------------------------------------------------------------------------
 
+#define DEBUG_OUTPUT                            // Enable Serial.begin debug output. It's mostly on startup/connection so no real performance to
+                                                // be gained by disabling it
+
 #define ANALOG_STICK_DEADZONE 64                // Analog sticks are scaled to a +/-256 range. Big deadzone/threshold when using for digital input
 #define MOUSE_STICK_DEADZONE  40                // Smaller deadzone when using it for mouse
 
@@ -114,6 +117,7 @@ int             _clampedMouseRateY       = 0;
 int             _mouseQuadX              = 0;
 int             _mouseQuadY              = 0;
 int             _numQuadratureTicks      = 0;
+int             _mouseWheelTicks         = 0;
 
 const uint8_t   _quad0[4]                = {0,1,1,0};
 const uint8_t   _quad1[4]                = {0,0,1,1};
@@ -154,24 +158,33 @@ void setup ()
     
     zeroOutputs();
 
-    Serial.begin(115200);
-    
-    delay(500);
-
     _statusLeds.init();
+    
+#ifdef DEBUG_OUTPUT
+    Serial.begin(115200);       
 
     // Give serial monitor a chance to connect
-    delayWithLEDUpdates( 1000 );
-    
-    Serial.println("");
-    Serial.println("");
-    Serial.println("");
-    Serial.println("----------------------------------------");
-    Serial.println("AmiBLEHID");
-    Serial.println("----------------------------------------");
+    delayWithLEDUpdates( 500 );
+#endif
+
+    if (Serial)
+    {
+        Serial.println("");
+        Serial.println("");
+        Serial.println("");
+        Serial.println("----------------------------------------");
+        Serial.println("AmiBLEHID");
+        Serial.println("----------------------------------------");
+    }
+
     loadSettings();
-    Serial.println("Starting NimBLE Client");    
-    Serial.println("");
+
+    if (Serial)
+    {
+        Serial.println("Starting NimBLE Client");    
+        Serial.println("");
+    }
+
   
     _btScan = new BTScan();
     _btScan->enableBinding( NimBLEDevice::getNumBonds()==0 );
@@ -242,7 +255,10 @@ void saveSettings()
 {
     _preferences.begin("AmiBLEHID", false);
 
-    Serial.printf("Save Settings: Mouse Rate %d, Gamepad Mode %d\n", _currMouseRateIdx, _currGamepadMode );
+    if (Serial)
+    {
+        Serial.printf("Save Settings: Mouse Rate %d, Gamepad Mode %d\n", _currMouseRateIdx, _currGamepadMode );
+    }
 
     _preferences.putUInt( "MouseRate",   _currMouseRateIdx );
     _preferences.putUInt( "GamepadMode", _currGamepadMode );
@@ -273,7 +289,7 @@ void loop ()
 
                 if ( foundDevice )
                 {
-                    Serial.println("Device found, attempting to connect!");
+                    if (Serial) Serial.println("Device found, attempting to connect!");
 
                     _statusLeds.setState(LED_STATUS, LEDMODE_BTCONNECTING);                 
                     delayWithLEDUpdates(16);
@@ -284,7 +300,7 @@ void loop ()
                     }            
                     else
                     {
-                        Serial.println("Failed to connect, resuming scan!");                        
+                        if (Serial) Serial.println("Failed to connect, resuming scan!");                        
 
                         _statusLeds.setState(LED_STATUS, LEDMODE_DISCONNECTED);
                         _statusLeds.setState(LED_MODE,   LEDMODE_DISCONNECTED);        
@@ -320,7 +336,7 @@ void loop ()
                     delayWithLEDUpdates(500);
 
                     _state = State_Scanning;
-                    Serial.println("Connection lost, restarting scan!");
+                    if (Serial) Serial.println("Connection lost, restarting scan!");
                     _btScan->enableBinding( NimBLEDevice::getNumBonds()==0 );
                     _btScan->start( _scanDuration, false );
                 }
@@ -371,7 +387,7 @@ void loop ()
                 delayWithLEDUpdates(10);
             }
 
-            Serial.println("Reset button held, clearing bonds, restarting scan!");                            
+            if (Serial) Serial.println("Reset button held, clearing bonds, restarting scan!");                            
             _btHIDConn->deleteAllBonds();                        
         }
         else
@@ -381,7 +397,7 @@ void loop ()
             delayWithLEDUpdates(750);
 
             int numBonds = NimBLEDevice::getNumBonds();            
-            Serial.printf("Reset button, restarting scan (%d bonds)\n", NimBLEDevice::getNumBonds() );                                                    
+            if (Serial) Serial.printf("Reset button, restarting scan (%d bonds)\n", NimBLEDevice::getNumBonds() );                                                    
         }                    
 
         _state = State_Scanning;        
@@ -460,14 +476,29 @@ static void IRAM_ATTR gpio_isr( void* arg )
             else
                 GPIO.out_w1tc.val = (1 << PIN_B);
                         
-            _cd32ButtonShiftRegister = _cd32buttonState>>1;                
+
+            // Todo - don't replicate LMB/RMB in button bits 1+2 when using mouse. Output wheel on those instead.
+            if ( _mouseWheelTicks>0 )
+            {
+                _cd32buttonState |= 32;
+                _mouseWheelTicks--;
+            }
+            else if ( _mouseWheelTicks<0 )
+            {
+                _cd32buttonState |= 16;
+                _mouseWheelTicks++;
+            }
+
+            // After the 7 buttons, we shift out a 0 and then finally a 1.
+            _cd32ButtonShiftRegister = (_cd32buttonState>>1) | 128;                
             _cd32Polling             = true;
             _cd32ticksSincePolled    = 0;
+
 
 #ifdef CD32_SHIFT_POLLING
             // Loop until all bits have been shifted out, or uintil our failsafe counter hits zero. 
             int  failsafe  = 500;
-            int  shiftBits = 6;
+            int  shiftBits = 8;
             bool prevClock = false;
         
             while(failsafe>0 && shiftBits>0)
@@ -565,7 +596,6 @@ void update_gamepad()
     int x = _btHIDConn->getGamepadLeftStickXAxis();
     int y = _btHIDConn->getGamepadLeftStickYAxis();    
 
-
     //Serial.printf("%d, %d, %d\n",  _btHIDConn->getGamepadLeftStickXAxis(),  _btHIDConn->getGamepadLeftStickYAxis(),  _btHIDConn->getGamepadHatSwitchDir() );   
 
     bool joyr = (x> deadzone) || (_btHIDConn->getGamepadDigitalXAxis()>0);
@@ -589,7 +619,7 @@ void update_gamepad()
 
     if ( cd32mode )
     {
-        int _buttonState = 0;
+        int buttonState = 0;
 
         // Right analog mapped to CD32 buttons, basically for Cecconoid
         int  rx = _btHIDConn->getGamepadRightStickXAxis();
@@ -602,16 +632,16 @@ void update_gamepad()
         btna |= rjoyd;
         btnb |= rjoyr;
 
-        if ( btna ) _buttonState |= 2;
-        if ( btnb ) _buttonState |= 1;
-        if ( _btHIDConn->getGamePadButton(4) || rjoyu )  _buttonState |= 4;
-        if ( _btHIDConn->getGamePadButton(3) || rjoyl )  _buttonState |= 8;
-        if ( _btHIDConn->getGamePadButton(7) )  _buttonState |= 16;
-        if ( _btHIDConn->getGamePadButton(6) )  _buttonState |= 32;
-        if ( _btHIDConn->getGamePadButton(11))  _buttonState |= 64;
-
+        if ( btna ) buttonState |= 2;
+        if ( btnb ) buttonState |= 1;
+        if ( _btHIDConn->getGamePadButton(4) || rjoyu )  buttonState |= 4;
+        if ( _btHIDConn->getGamePadButton(3) || rjoyl )  buttonState |= 8;
+        if ( _btHIDConn->getGamePadButton(7) )  buttonState |= 16;
+        if ( _btHIDConn->getGamePadButton(6) )  buttonState |= 32;
+        if ( _btHIDConn->getGamePadButton(11))  buttonState |= 64;
+        
         noInterrupts();
-        _cd32buttonState = _buttonState;    
+        _cd32buttonState = buttonState;            
         if (!_cd32Polling)
         {
             digitalWrite(PIN_A, btna); 
@@ -744,11 +774,18 @@ void update_mouse()
 
     int mx  = _btHIDConn->getMouseDeltaX();
     int my  = _btHIDConn->getMouseDeltaY();
+    int mw  = _btHIDConn->getMouseDeltaWheel();
     _btHIDConn->resetMouseDeltas();
-
+        
     int lmb = _btHIDConn->getMouseButton(0);
     int rmb = _btHIDConn->getMouseButton(1);
+    int mmb = _btHIDConn->getMouseButton(2);
 
+    int buttonState = 0;
+    if ( lmb ) buttonState |= 2;
+    if ( rmb ) buttonState |= 1;
+    if ( mmb ) buttonState |= 4;
+        
     // Apply rate scaling here
     int rate = k_mouseRates[_currMouseRateIdx];    
 
@@ -778,17 +815,25 @@ void update_mouse()
     if ( _mouseRateY<0 && _mouseDeltaY>0 ) _mouseDeltaY = 0;
 
     _numQuadratureTicks = 0;
+
+    _cd32buttonState = buttonState;     
+    _mouseWheelTicks += mw;
+    
+    if (!_cd32Polling)
+    {
+        digitalWrite(PIN_A, lmb); 
+        digitalWrite(PIN_B, rmb); 
+    }
+
     interrupts();
 
-    digitalWrite(PIN_A, lmb); 
-    digitalWrite(PIN_B, rmb); 
 
     // White LED for active mouse
     _statusLeds.setButtonIndicator( lmb | rmb );
     _statusLeds.setState(LED_STATUS, LEDMODE_MOUSE_ACTIVE);    
 
     // Check for mode switch (cycle mouse speeds)
-    int inc = modeCycleCheck( false, _btHIDConn->getMouseButton(2) || digitalRead(PIN_BTN_MODE)==0 );
+    int inc = modeCycleCheck( false, _btHIDConn->getMouseButton(3) || digitalRead(PIN_BTN_MODE)==0 );
 
     if ( inc!=0 )
     {        

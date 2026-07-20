@@ -32,6 +32,7 @@ private:
 
     int m_mouseDeltaX;
     int m_mouseDeltaY;    
+    int m_mouseDeltaWheel;
     
     // False until we've recieved first state update (to ensure axes init to centre position)
     bool m_stateValid;
@@ -59,6 +60,7 @@ public:
 
     int  getMouseDeltaX();
     int  getMouseDeltaY();
+    int  getMouseDeltaWheel();
     void resetMouseDeltas();
     bool getMouseButton( int idx );
     

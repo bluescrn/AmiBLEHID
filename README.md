@@ -17,7 +17,7 @@ The H2 has no wifi, and only supports BLE (no Bluetooth Classic). Other ESP32 mo
 
 ## Features
 
-- Mouse speed control (cycle 5 levels via button on board, or hold middle mouse button)
+- Mouse speed control (cycle 5 levels via button on board, or press mouse button 4 if the mouse has one)
 - Mouse emulation using right analog stick when using a controller and Amiga joystick port 1
 - 'Up-to-jump' mode - Maps the 2nd button to joystick up
 - Experimental CD32 protocol support (7 buttons)
@@ -72,19 +72,19 @@ A real CD32 controller contains a shift register chip, used to output the state 
 
 There is an initial attempt to support this. The status LED will switch from green to purple when CD32 button reading is detected (pin 9 changing level).
 
-But emulating the shift register behaviour in code requires quite responsive interrupts, and regular ESP32 interrupts (written in C and via the Arduino ESP32 framework) on the H2 (single-core 96MHz RISC-V) aren't quite fast/stable enough for this. While it's mostly functional, there are currently some dropped and spurious button inputs picked up due to the interrupts being delayed.
+But emulating the shift register behaviour in code requires quite responsive interrupts, and regular ESP32 interrupts on the H2 (single-core 96MHz RISC-V) aren't quite fast/stable enough for this. While it's mostly functional, there are currently some dropped and spurious button inputs picked up due to the interrupts being delayed. I've tried to optimize the C code a bit by using ESP-IDF functions for the interrupt handling rather than the Arduino wrapper, which may have helped a bit, but it's not 100%.
 
 It looked like this should be resolvable in software by moving everything to ESP-IDF and using a high-priority interrupt (written in assembly language), but that solution only applies to Xtensa-based ESP32s, no the RISC-V-based ESP32-H2.
 
 I've been testing CD32 support with [Joytest_CP](https://aminet.net/package/driver/input/joytest_CP) and also with [Cecconoid](https://thalamusdigital.itch.io/cecconoid-amiga).
 
-([JoyPortTest](https://aminet.net/package/driver/input/JoyPortTest.lha) doesn't pick up CD32 buttons. Not sure why, maybe it's trying to read too fast as I'm using an A1200 with a PiStorm?)
+([JoyPortTest](https://aminet.net/package/driver/input/JoyPortTest.lha) didn't work initially, but it turns out that a real CD32 pad will output a zero then a one after the 7 button bits, so 9 bits shifted out in total. After tweaking the ESP32 code to add the extra two bits, JoyPortTest can detect+read it as a CD32 pad.
 
-Update: After investigating further with an oscilloscope, I could see that Joytest CP actually samples the CD32 buttons 7 times in rapid succession, once per call to the Blitz Basic 'JoyB()' function. It's a bit more stable if only sampling it once per frame, triggering a lot fewer interrupts. Could also see that responding to the rising edge of the clock signal was better than the falling edge, giving the interrupt slightly more time to respond. But I could also see that every now and again, pulses would shift by the duration of a whole pulse or more - there's definitely something delaying the response to the GPIO interrupts - I'm guessing at critical sections or higher-priority interrupts relating to Bluetooth, but don't know for sure and don't have any solid ideas to improve it further on the software side yet. 
+After investigating further with an oscilloscope, I could see that Joytest CP actually samples the CD32 buttons 7 times in rapid succession, once per call to the Blitz Basic 'JoyB()' function. It's a bit more stable if only sampling it once per frame, triggering a lot fewer interrupts. Could also see that responding to the rising edge of the clock signal was better than the falling edge, giving the interrupt slightly more time to respond. But I could also see that every now and again, pulses would shift by the duration of a whole pulse or more - there's definitely something delaying the response to the GPIO interrupts - I'm guessing at critical sections or higher-priority interrupts relating to Bluetooth, but don't know for sure and don't have any solid ideas to improve it further on the software side yet.
 
 ![Oscillscope trace of CD32 protocol clock and response from the ISR](/assets/images/cd32proto.png)
 
-Image shows the normal case when it's working well - The ISR seems to be responding within a few microseconds most of the time, but sometimes the output pulses are delayed quite significantly.
+Image shows the normal case when it's working well - The ISR seems to be responding within a few microseconds most of the time, but sometimes the output pulses are delayed quite significantly, causing spurious or dropped button presses.
 
 ## USB controllers?
 
@@ -98,7 +98,7 @@ One thought I'd had is that it would make sense to re-use the well-understood CD
 
 But that'd require a custom driver, likely a modified version of the [TankMouse]( https://aminet.net/package/driver/input/TankMouse) driver
 
-But there's no point attempting any of that unless I can get more robust CD32 support working by using high-priority interrupts...
+Update: Mouse wheel up/down and 3rd mouse buttons are now output using the CD32 protocol. No Amiga driver yet.
 
 ## BOM
 

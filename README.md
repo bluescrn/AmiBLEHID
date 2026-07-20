@@ -86,6 +86,8 @@ After investigating further with an oscilloscope, I could see that Joytest CP ac
 
 Image shows the normal case when it's working well - The ISR seems to be responding within a few microseconds most of the time, but sometimes the output pulses are delayed quite significantly, causing spurious or dropped button presses.
 
+There are only 7 clock pulses when testing with JoyTestCP (which uses the Blitz Basic 2 function to read the buttons), but with JoyPortTest there are 2 additional pulses, which it expects to return 0 then 1 and uses this to detect the presence of a CD32 controller.
+
 ## USB controllers?
 
 The ESP32-H2 board has a USB-C connector. It would be nice if it could also support wired USB controller, but I don't think the ESP32-H2 can function as a USB host, and if it could, power draw would likely be too much (especially controllers with rumble motors and RGB lighting). So don't try plugging anything in when it's connected to the Amiga unless you're connecting it to a PC for programming/debug output.

@@ -92,15 +92,11 @@ There are only 7 clock pulses when testing with JoyTestCP (which uses the Blitz 
 
 The ESP32-H2 board has a USB-C connector. It would be nice if it could also support wired USB controller, but I don't think the ESP32-H2 can function as a USB host, and if it could, power draw would likely be too much (especially controllers with rumble motors and RGB lighting). So don't try plugging anything in when it's connected to the Amiga unless you're connecting it to a PC for programming/debug output.
 
-## Mouse Wheels?
+## Mouse Wheel Support
 
-Currently only 2 mouse buttons are supported, via the Fire1+Fire2 pins. I'm somewhat aware of atttempts to support mouse wheels on Amiga, and seen references to the Cocolino protocol, but no real documentation of it.
+There is now an experimental implementation of mouse wheel and middle button support. Instead of attempting to implement the Cocolino protocol, the CD32 controller protocol is used to pass additional button states to the Amiga. This avoids any messing with the quadrature outputs and was simple to implement on the ESP32 using the existing CD32 controller logic. But it has the same issue with ESP32 interrupt timing and may suffer from occasional dropped/spurious inputs. In practice, it seems fairly reliable though
 
-One thought I'd had is that it would make sense to re-use the well-understood CD32 protocol to output additional mouse data, that gives 7 bits polled once per frame. Maybe use 4 bits as a signed value for the wheel movement, leaving 3 bits free for additional buttons. Or just treating wheel up/down as buttons if one 'wheel tick' every 1/30th sec turns out to be enough?
-
-But that'd require a custom driver, likely a modified version of the [TankMouse]( https://aminet.net/package/driver/input/TankMouse) driver
-
-Update: Mouse wheel up/down and 3rd mouse buttons are now output using the CD32 protocol. No Amiga driver yet.
+This requires a driver on the Amiga to read the additional buttons from a vblank interrupt handler and create the mouse wheel events. The driver is a modified version of the [TankMouse]( https://aminet.net/package/driver/input/TankMouse) driver.
 
 ## BOM
 

@@ -764,6 +764,9 @@ void IRAM_ATTR onQuadratureTimer()
 
 void update_mouse()
 {
+    _cd32ticksSincePolled++;
+    bool cd32mode = (_cd32ticksSincePolled<250);
+
     if (!_quadratureTimerStarted)
     {
         _quadratureTimerStarted = true;
@@ -830,7 +833,7 @@ void update_mouse()
 
     // White LED for active mouse
     _statusLeds.setButtonIndicator( lmb | rmb );
-    _statusLeds.setState(LED_STATUS, LEDMODE_MOUSE_ACTIVE);    
+    _statusLeds.setState(LED_STATUS, cd32mode ? LEDMODE_CD32MOUSE_ACTIVE : LEDMODE_MOUSE_ACTIVE);        
 
     // Check for mode switch (cycle mouse speeds)
     int inc = modeCycleCheck( false, _btHIDConn->getMouseButton(3) || digitalRead(PIN_BTN_MODE)==0 );
@@ -860,8 +863,9 @@ void zeroOutputs()
     noInterrupts();    
     _clampedMouseRateY = 0;
     _clampedMouseRateX = 0;
+    _cd32ticksSincePolled = 250;
     interrupts();
-
+    
     digitalWrite(PIN_U, 0); 
     digitalWrite(PIN_D, 0); 
     digitalWrite(PIN_L, 0); 

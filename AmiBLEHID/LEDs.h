@@ -13,13 +13,14 @@ enum LEDId
 
 enum LEDState 
 {
-    LEDMODE_OFF                   = 0,    
-    LEDMODE_BTSCAN                = 1,
-    LEDMODE_BTBIND                = 2,
-    LEDMODE_BTCONNECTING          = 3,
-    LEDMODE_CONTROLLER_ACTIVE     = 4,
-    LEDMODE_CD32CONTROLLER_ACTIVE = 5,
-    LEDMODE_MOUSE_ACTIVE          = 6,
+    LEDMODE_OFF                   = -1,    
+    LEDMODE_BTSCAN                = 0,
+    LEDMODE_BTBIND                = 1,
+    LEDMODE_BTCONNECTING          = 2,
+    LEDMODE_CONTROLLER_ACTIVE     = 3,
+    LEDMODE_CD32CONTROLLER_ACTIVE = 4,
+    LEDMODE_MOUSE_ACTIVE          = 5,
+    LEDMODE_CD32MOUSE_ACTIVE      = 6,
     LEDMODE_IDLE                  = 7,
     LEDMODE_DISCONNECTED          = 8,
     LEDMODE_HARDRESET             = 9,

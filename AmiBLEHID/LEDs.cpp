@@ -93,6 +93,11 @@ void LEDs::process()
                 col = _buttonPressed ? 0x006060 : 0x002020;     // dim blue
                 break;
 
+            case LEDMODE_CD32MOUSE_ACTIVE:
+                col = _buttonPressed ? 0x106040 : 0x042820;     // more greeny blue
+                break;
+                
+
             case LEDMODE_IDLE:
                 col = 0x220000;
                 break;

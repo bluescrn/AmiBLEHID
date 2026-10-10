@@ -3055,7 +3055,7 @@
 		)
 		(uuid "fc5e80a7-d89f-499b-b49c-c9d63579219c")
 	)
-	(global_label "J_POTX"
+	(global_label "J_POTY"
 		(shape input)
 		(at 166.37 64.77 0)
 		(fields_autoplaced yes)
@@ -3067,7 +3067,7 @@
 		)
 		(uuid "08facc79-8899-48ac-b011-63275604ec49")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 176.068 64.77 0)
+			(at 175.9471 64.77 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3077,7 +3077,7 @@
 			)
 		)
 	)
-	(global_label "J_POTY"
+	(global_label "J_POTX"
 		(shape input)
 		(at 219.71 68.58 90)
 		(fields_autoplaced yes)
@@ -3089,7 +3089,7 @@
 		)
 		(uuid "0e1fec7a-f479-4c4c-8e06-ff32ef5f18dc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 219.71 59.0029 90)
+			(at 219.71 58.882 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3275,7 +3275,7 @@
 			)
 		)
 	)
-	(global_label "J_POTX"
+	(global_label "J_POTY"
 		(shape input)
 		(at 217.17 68.58 90)
 		(fields_autoplaced yes)
@@ -3287,7 +3287,7 @@
 		)
 		(uuid "5be51dff-11ec-4c60-acc5-d2137a975679")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 217.17 58.882 90)
+			(at 217.17 59.0029 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3341,7 +3341,7 @@
 			)
 		)
 	)
-	(global_label "J_POTY"
+	(global_label "J_POTX"
 		(shape input)
 		(at 166.37 48.26 0)
 		(fields_autoplaced yes)
@@ -3353,7 +3353,7 @@
 		)
 		(uuid "ee0a3023-ec83-4358-a2e5-417b118bf99c")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 175.9471 48.26 0)
+			(at 176.068 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)

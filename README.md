@@ -2,7 +2,7 @@
 
 Work in progress, but now fairly functional. Needs a better name.
 
-![Pic of prototype](/assets/images/prototype5.jpeg)
+![Pic of prototype](/assets/images/prototype5.jpg)
 
 *Another new iteration, v0.5 PCB shrunk down to fit A600. No 3D printable case for this one yet. Nobody seems to make a DE-9 connector without the 'ears', but if you try to snip them off a regular one, the metal parts fall apart, leaving the central plastic part which can be used as-is*
 

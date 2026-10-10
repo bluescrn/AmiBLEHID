@@ -2,8 +2,9 @@
 
 Work in progress, but now fairly functional. Needs a better name.
 
-![Pic of prototype](/assets/images/prototype4.jpeg)
-*Latest iteration, v0.4 PCB with extra diodes to enable experimental CD32 protocol support, and one with a 3D printed shell (Status LEDs are visible through a very thin section of the top shell)*
+![Pic of prototype](/assets/images/prototype5.jpeg)
+
+*Another new iteration, v0.5 PCB shrunk down to fit A600. No 3D printable case for this one yet. Nobody seems to make a DE-9 connector without the 'ears', but if you try to snip them off a regular one, the metal parts fall apart, leaving the central plastic part which can be used as-is*
 
 ## What is it?
 
